@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <script src="https://cdn.jsdelivr.net/npm/mathlive@0.106.0"></script>
+        <script type="module" src="main.js"></script>
+        <link rel="stylesheet" type="text/css" href="style.css">
+        <meta charset="utf-8" />
+    </head>
+    <body>
+        <div class="first-row">
+            <div class="general-column"> 
+                <div class="settings">
+                    <div>
+                        <p>Min brightness: <math-field id="min-value">0</math-field></p>
+                        <p>Max brightness: <math-field id="max-value">1</math-field></p>
+                    </div>
+                    <div>
+                        <p>Min <math-field readonly>x</math-field>: <math-field id="min-x">0</math-field></p>
+                        <p>Max <math-field readonly>x</math-field>: <math-field id="max-x">1</math-field></p>
+                    </div>
+                    <div>
+                        <p>Min <math-field readonly>y</math-field>: <math-field id="min-y">0</math-field></p>
+                        <p>Max <math-field readonly>y</math-field>: <math-field id="max-y">1</math-field></p>
+                    </div>
+                    <div>
+                        <p>One second is equal to <math-field id="unit-t">1</math-field> units of <math-field readonly>t</math-field></p>
+                    </div>
+                </div>
+                <div>
+                    <button id="animate-button">Animate</button>
+                    <button id="add-user-function-button">Add function</button>
+                    <button id="add-user-constant-button">Add constant</button>
+                </div>
+                <div class="main-function-definition">
+                    <div>
+                        <math-field readonly>\mathrm{brightness}: \R \times \R \times \R \to \R</math-field>
+                    </div>
+                    <div>
+                        <math-field readonly>\mathrm{brightness}(x, y, t) = \;</math-field>
+                        <math-field id="equation">xy \cos^2 t</math-field>
+                    </div>
+                </div>
+            </div>
+            <main></main>
+        </div>
+        <div id="user-function-list">
+            <template id="user-function-template">
+                <div class="user-function-definition">
+                    <div class="user-function-movement">
+                        <button class="left-button"> &lt; </button>
+                        <button class="right-button"> &gt; </button>
+                    </div>
+                    <div>
+                        <math-field class="user-function-symbol">f</math-field>
+                        <math-field readonly>:</math-field>
+                        <math-field class="user-function-input-signature">\R</math-field>
+                        <math-field readonly>\to</math-field>
+                        <math-field class="user-function-output-signature">\R</math-field>
+                    </div>
+                    <div>
+                        <math-field readonly class="readonly-user-function-symbol">f</math-field>
+                        <math-field readonly>\Big(</math-field>
+                        <math-field class="user-function-inputs">x</math-field>
+                        <math-field readonly>\Big) =</math-field>
+                        <math-field class="user-function-equation">x</math-field>
+                    </div>
+                </div>
+            </template>
+        </div>
+        <div id="user-constant-list">
+            <template id="user-constant-template">
+                <div class="user-constant-definition">
+                    <math-field class="user-constant-symbol">a</math-field>
+                    <math-field readonly>=</math-field>
+                    <math-field class="user-constant-value">1</math-field>
+                </div>
+            </template>
+        </div>
+    </body>
+</html>

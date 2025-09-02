@@ -1,0 +1,117 @@
+html, body {
+    margin: 0;
+    padding: 0;
+    background: white;
+    width:100%;
+    padding-top: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2em;
+    font-size: 18px;
+}
+
+body {
+    margin-top: 1em;
+    margin-bottom: 1em;
+    gap: 1em;
+}
+
+.first-row {
+    display: flex;
+    flex-direction: row;
+    gap: 2em;
+    align-items: center;
+}
+
+.general-column {
+    display: flex;
+    flex-direction: column;
+    gap: 2em;
+    align-items: center;
+}
+
+.settings {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 2em;
+    align-items: center;
+}
+
+p {
+    padding: 0;
+    margin: 0;
+}
+
+canvas {
+    display: block;
+    border: 2px solid black;
+}
+
+.text-input {
+    display: inline-block;
+}
+
+.user-function-item {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+}
+
+.main-functino-definition, .user-function-definition {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0.5em;
+}
+
+.user-function-definition {
+    border: 1px dotted black;
+    padding: 0.5em;
+}
+
+.user-function-movement {
+    align-self: center;
+}
+
+.user-function-definition > div {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+math-field[readonly] {
+    border: none;
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+math-field[readonly]::part(container) {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+#user-function-list, #user-constant-list{
+    display: flex;
+    gap: 1em;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    padding: 0 3em;
+}
+
+math-field::part(menu-toggle) {
+    display: none;
+}
+
+math-field::part(virtual-keyboard-toggle) {
+    display: none;
+}
+
