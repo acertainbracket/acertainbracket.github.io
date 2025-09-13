@@ -1,4 +1,4 @@
-import { ComputeEngine } from "https://cdn.jsdelivr.net/npm/@cortex-js/compute-engine@0.28.0/dist/compute-engine.esm.js";
+import { ComputeEngine } from "https://cdn.jsdelivr.net/npm/@cortex-js/compute-engine@0.30.2/dist/compute-engine.esm.js";
 import p5 from "https://cdn.jsdelivr.net/npm/p5@2.0.4/lib/p5.esm.js";
 
 const brightnessEquationElement = document.querySelector('#equation');
@@ -64,15 +64,19 @@ const operationDict = {
   'Floor': node => `floor(${mj2gl(node[1])})`,
   'Ceil': node => `ceil(${mj2gl(node[1])})`,
   'Abs': node => `abs(${mj2gl(node[1])})`,
-  'Power': node => `pow(${mj2gl(node[1])}, ${mj2gl(node[2])})`,
-  'Add': node => '(' + node.slice(1).map(mj2gl).join('+') + ')',
-  'Negate': node => `(-1.*${mj2gl(node[1])})`,
-  'Multiply': node => '(' + node.slice(1).map(mj2gl).join('*') + ')',
+  'Power': node => Number.isInteger(node[2]) && node[2] < 5 ?
+    mj2gl(['Multiply',...(new Array(node[2])).fill(node[1])]) :
+    `pow(${mj2gl(node[1])}, ${mj2gl(node[2])})`,
+  'Complex': node => `complex(${mj2gl(node[1])}, ${mj2gl(node[2])})`,
+  'Add': node => node.length === 3 ?
+  `add(${mj2gl(node[1])}, ${mj2gl(node[2])})` :
+  `add(${mj2gl(node[1])}, ${mj2gl(['Add', ...node.slice(2)])})`,
+  'Negate': node => `negate(${mj2gl(node[1])})`,
   'Multiply': node => node.length === 3 ?
   `multiply(${mj2gl(node[1])}, ${mj2gl(node[2])})` :
   `multiply(${mj2gl(node[1])}, ${mj2gl(['Multiply', ...node.slice(2)])})`,
   'Norm': node => `length(${mj2gl(node[1])})`,
-  'Divide': node => `(${mj2gl(node[1])} / ${mj2gl(node[2])})`,
+  'Divide': node => `divide(${mj2gl(node[1])}, ${mj2gl(node[2])})`,
   'Rational': node => `(${mj2gl(node[1])} / ${mj2gl(node[2])})`,
   'Mod': node => `mod(${mj2gl(node[1])}, ${mj2gl(node[2])})`,
   'Min': node => node.length === 3 ?
@@ -92,9 +96,13 @@ const operationDict = {
     if (node?.[1]?.[0] === 'Power') {
       iterations.push({symbol: node[1][1], amount: node[1][2][2], ...symbolsMap[node[1][1]]});
       if (node?.[2]?.[0] === 'Tuple') {
-        return `iterate_${node[1][1]}_${node[1][2][2]}(${node[2].slice(1).map(mj2gl).join(',')})`;
+        let inputs = node[2].slice(1).map((child, index) => symbolsMap[node[1][1]].inputSignature[index] === 'complex' ? `injection_map(${mj2gl(child)})` : mj2gl(child))
+        return `iterate_${node[1][1]}_${node[1][2][2]}(${inputs.join(",")})`;
+        //return `iterate_${node[1][1]}_${node[1][2][2]}(${node[2].slice(1).map(mj2gl).join(',')})`;
       }
-      return `iterate_${node[1][1]}_${node[1][2][2]}(${mj2gl(node[2])})`;
+      let input = symbolsMap[node[1][1]].inputSignature[0] === 'complex' ? `injection_map(${mj2gl(node[2])})` : mj2gl(node[2]);
+      return `iterate_${node[1][1]}_${node[1][2][2]}(${input})`;
+      //return `iterate_${node[1][1]}_${node[1][2][2]}(${mj2gl(node[2])})`;
     }
     return 'to_tuple(' + node.slice(1).map(mj2gl).join(',') + ')';
   }
@@ -105,7 +113,9 @@ function mj2gl(node) {
     if (node[0] in operationDict) {
       return operationDict[node[0]](node);
     } else {
-      return node[0]+'(' + node.slice(1).map(mj2gl).join(',') + ')';
+      return node[0]+'(' + node.slice(1).map((child, index) => symbolsMap[node[0]].inputSignature[index] === 'complex' && symbolsMap[node[0]].inputSignature.length === node.slice(1).length ?
+        `injection_map(${mj2gl(child)})` :
+        mj2gl(child)).join(',') + ')';
     }
   } else if (typeof node === 'number'){
     const strRep = node.toString();
@@ -169,6 +179,7 @@ function declareFunctions(definitionElements) {
 
     const mathjson2glsl = {
       "RealNumbers": "float",
+      "ComplexNumbers": "complex",
       "RealNumbers2": "vec2",
       "RealNumbers3": "vec3",
       "RealNumbers4": "vec4",
@@ -176,7 +187,6 @@ function declareFunctions(definitionElements) {
 
     const inputSignatureElement = definitionElement.querySelector('.user-function-input-signature');
     const inputSignatureTree = JSON.parse(inputSignatureElement.getValue('math-json'));
-
     let currentNode = inputSignatureTree;
     const inputSignature = [];
     while (Array.isArray(currentNode)) {
@@ -187,7 +197,13 @@ function declareFunctions(definitionElements) {
 
     const outputSignatureElement = definitionElement.querySelector('.user-function-output-signature');
     const outputSignatureTree = JSON.parse(outputSignatureElement.getValue('math-json'));
-    const outputSignature = Array.isArray(outputSignatureTree) ? outputSignatureTree.slice(1).map(node => mathjson2glsl[node]) : [mathjson2glsl[outputSignatureTree]];
+    currentNode = outputSignatureTree;
+    const outputSignature = [];
+    while (Array.isArray(currentNode)) {
+      outputSignature.push(mathjson2glsl[currentNode[1]]);
+      currentNode = currentNode[2];
+    }
+    outputSignature.push(mathjson2glsl[currentNode]);
 
 
     if (inputSignature.length > 1) {
@@ -233,7 +249,6 @@ function generateFunctions(functionDeclarations, allSignatures, definitionElemen
   ${structName} to_tuple(${structName.split("_").map((type, i) => `${type} argument_${i}`).join(', ')}){
     return ${structName}(${structName.split("_").map((type, i) => `argument_${i}`).join(', ')});
   }
-  
   `).concat(functionDeclarations.map(({equationElement, functionSymbol, variables, inputSignature, outputSignature}) => `
   ${outputSignature.join("_")} ${functionSymbol}(${variables.map((variable, i) => `${inputSignature[i]} ${variable}`).join(', ')}) {
     return ${mj2gl(JSON.parse(equationElement.getValue('math-json')))};
@@ -279,19 +294,9 @@ function generateGLSL() {
   let declared = new Set();
   for (let {functionSymbol, variables} of functionDeclarations) {
     const symbolString = functionSymbol.charAt(0);
-    // let symbolString;
-    // if (Array.isArray(functionSymbol)) {
-    //   symbolString = functionSymbol[1];
-    // } else {
-    //   symbolString = functionSymbol.charAt(0);
-    // }
 
     if (!declared.has(symbolString)) {
-      equationComputeEngine.declare(symbolString, {
-        kind: 'signature',
-        args: variables.map(variable => ({type: 'real'})),
-        result: 'real',
-      });
+      equationComputeEngine.declare(symbolString, "function");
       declared.add(symbolString);
     }
   }
@@ -345,52 +350,124 @@ function generateGLSL() {
   uniform float max_y;
   uniform float unit_t;
 
+  struct complex {
+    float x;
+    float y;
+  };
+
   ${structDeclarationStrings.join('')}
 
+  complex injection_map(float x) {
+    return complex(x, 0.0);
+  }
+  complex injection_map(complex z) {
+    return z;
+  }
+
+  float abs(complex z) {
+    return z.x * z.x + z.y * z.y;
+  }
+
+  complex negate(complex z) {
+    return complex(-z.x, -z.y);
+  }
+  float negate(float x) {
+    return -1. * x;
+  }
+  vec2 negate(vec2 v) {
+    return -1. * v;
+  }
+  vec3 negate(vec3 v) {
+    return -1. * v;
+  }
+  vec4 negate(vec4 v) {
+    return -1. * v;
+  }
+
+  complex add(float left, complex right) {
+    return complex(left + right.x, right.y);
+  }
+  complex add(complex left, float right) {
+    return complex(left.x + right, left.y);
+  }
+  complex add(complex left, complex right) {
+    return complex(left.x + right.x, left.y + right.y);
+  }
+  float add(float left, float right) {
+    return left + right;
+  }
+  vec2 add(vec2 left, vec2 right) {
+    return left+right;
+  }
+  vec3 add(vec3 left, vec3 right) {
+    return left+right;
+  }
+  vec4 add(vec4 left, vec4 right) {
+    return left+right;
+  }
+
+  complex multiply(complex left, float right) {
+    return complex(right * left.x, right * left.y);
+  }
+  complex multiply(float left, complex right) {
+    return complex(left * right.x, left * right.y);
+  }
+  complex multiply(complex left, complex right) {
+    return complex(left.x * right.x - left.y * right.y, left.x * right.y + left.y * right.x);
+  }
   float multiply(float left, float right) {
     return left * right;
   }
-
   vec2 multiply(vec2 left, float right) {
     return right * left;
   }
-
   vec3 multiply(vec3 left, float right) {
     return right * left;
   }
-
   vec4 multiply(vec4 left, float right) {
     return right * left;
   }
-
   vec2 multiply(float left, vec2 right) {
     return left * right;
   }
-
   vec3 multiply(float left, vec3 right) {
     return left * right;
   }
-
   vec4 multiply(float left, vec4 right) {
     return left * right;
   }
-
   float multiply(vec2 left, vec2 right) {
     return dot(left,right);
   }
-
   float multiply(vec3 left, vec3 right) {
     return dot(left,right);
   }
-
   float multiply(vec4 left, vec4 right) {
     return dot(left,right);
+  }
+
+  complex divide(complex left, float right) {
+    return complex(left.x / right, left.y / right);
+  }
+  //  L      L (x - yi)        xL - yL i
+  // ----- = --------------- = ----------
+  // x + yi  (x + yi)(x - yi)   x^2 + y^2
+  complex divide(float left, complex right) {
+    return complex(right.x * left / (right.x*right.x + right.y*right.y), -1.0 * right.y * left / (right.x * right.x + right.y * right.y));
+  }
+  // Lx+Lyi  (Lx+Lyi) (Rx - Ryi)      LxRx+LyRy + (LyRx-LxRy)i
+  // ----- = ---------------------- = ------------------
+  // Rx + Ryi  (Rx + Ryi)(Rx - Ryi)   Rx^2 + Ry^2
+  complex divide(complex left, complex right) {
+    return complex((left.x*right.x+left.y*right.y) / (right.x*right.x + right.y*right.y), (left.y*right.x-left.x*right.y) / (right.x * right.x + right.y * right.y));
+  }
+  float divide(float left, float right) {
+    return left / right;
   }
 
   float atanh(float x) {
     return 0.5 * (log(1.0 + x) - log(1.0 - x));
   }
-
   float tanh(float x) {
     return (exp(2.0 * x) - 1.0)/(exp(2.0 * x) + 1.0); 
   }
@@ -408,11 +485,10 @@ function generateGLSL() {
     gl_FragColor = vec4(vec3((color - min_value)/(max_value-min_value)), 1.0);
   }
   `;
-  console.log(fragSrc);
+  console.log(fragSrc.split("\n").map((line, index) => (index + 1).toString().padEnd(3, " ") + line).join("\n"));
 
   return [vertSrc, fragSrc];
 }
-
 
 document.querySelector('#add-user-function-button').onclick = () => {
   const clone = document.querySelector('#user-function-template').content.cloneNode(true);
@@ -426,7 +502,37 @@ document.querySelector('#add-user-function-button').onclick = () => {
   clone.querySelector('.right-button').onclick = (e) => {
     e.target.parentElement.parentElement.nextElementSibling?.after(e.target.parentElement.parentElement);
   }
+  const inputSignatureMathField = clone.querySelector('.user-function-input-signature');
+  const outputSignatureMathField = clone.querySelector('.user-function-output-signature');
   parentElement.appendChild(clone);
+  inputSignatureMathField.inlineShortcuts = {
+    ...inputSignatureMathField.inlineShortcuts,
+    "*": "\\times",
+    "c": "\\mathbb{C}",
+    "C": "\\mathbb{C}",
+    "r": "\\mathbb{R}",
+    "r2": "\\mathbb{R}^2",
+    "r3": "\\mathbb{R}^3",
+    "r4": "\\mathbb{R}^4",
+    "R": "\\mathbb{R}",
+    "R2": "\\mathbb{R}^2",
+    "R3": "\\mathbb{R}^3",
+    "R4": "\\mathbb{R}^4",
+  };
+  outputSignatureMathField.inlineShortcuts = {
+    ...outputSignatureMathField.inlineShortcuts,
+    "*": "\\times",
+    "c": "\\mathbb{C}",
+    "C": "\\mathbb{C}",
+    "r": "\\mathbb{R}",
+    "r2": "\\mathbb{R}^2",
+    "r3": "\\mathbb{R}^3",
+    "r4": "\\mathbb{R}^4",
+    "R": "\\mathbb{R}",
+    "R2": "\\mathbb{R}^2",
+    "R3": "\\mathbb{R}^3",
+    "R4": "\\mathbb{R}^4",
+  };
 };
 
 document.querySelector('#add-user-constant-button').onclick = () => {
