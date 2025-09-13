@@ -1,0 +1,7 @@
+{
+    "dependencies": {
+        "p5": "^2.0.4",
+        "@cortex-js/compute-engine": "^0.30.2",
+        "mathlive": "^0.107.0"
+    }
+}
