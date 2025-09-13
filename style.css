@@ -1,27 +1,32 @@
+* {
+    box-sizing: border-box;
+}
+
 html, body {
     margin: 0;
     padding: 0;
     background: white;
-    width:100%;
+    width: 100%;
     padding-top: 10px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.2em;
     font-size: 18px;
+    overflow-x: hidden;
 }
 
 body {
-    margin-top: 1em;
-    margin-bottom: 1em;
+    padding-top: 1em;
+    padding-bottom: 1em;
     gap: 1em;
 }
 
-.first-row {
+.settings-wrapper {
     display: flex;
     flex-direction: row;
     gap: 2em;
     align-items: center;
+    max-width: 90vw;
 }
 
 .general-column {
@@ -34,12 +39,15 @@ body {
 .settings {
     display: flex;
     flex-direction: row;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 2em;
     align-items: center;
+    justify-content: center;
+    max-width: 90vw;
 }
 
 p {
+    width: max-content;
     padding: 0;
     margin: 0;
 }
@@ -53,14 +61,7 @@ canvas {
     display: inline-block;
 }
 
-.user-function-item {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: center;
-}
-
-.main-functino-definition, .user-function-definition {
+.main-function-definition, .user-function-definition {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -68,20 +69,45 @@ canvas {
     gap: 0.5em;
 }
 
-.user-function-definition {
+.user-constant-definition {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5em;
+}
+
+.user-constant-definition, .user-function-definition {
     border: 1px dotted black;
     padding: 0.5em;
+    max-width: 100%;
+}
+
+.header-buttons {
+    align-self: stretch;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: stretch;
 }
 
 .user-function-movement {
-    align-self: center;
+    display: flex;
+    flex-direction: row;
 }
 
-.user-function-definition > div {
+.invisible-button {
+    pointer-events: none;
+    opacity: 0;
+}
+
+.user-function-definition .definition-layout {
     display: flex;
     flex-direction: row;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    max-width: 100%;
+    overflow-x: scroll;
 }
 
 math-field[readonly] {
@@ -92,9 +118,28 @@ math-field[readonly] {
     margin-right: 0;
 }
 
+.no-focus {
+    tabindex: -1;
+}
+
 math-field[readonly]::part(container) {
-    padding-left: 0;
-    padding-right: 0;
+    padding: 0;
+    margin: 0;
+}
+
+math-field[readonly]::part(content) {
+    padding: 0;
+    margin: 0;
+}
+
+math-field::part(menu-toggle) {
+    display: none;
+    pointer-events: none;
+}
+
+math-field::part(virtual-keyboard-toggle) {
+    display: none;
+    pointer-events: none;
 }
 
 #user-function-list, #user-constant-list{
@@ -104,14 +149,16 @@ math-field[readonly]::part(container) {
     flex-wrap: wrap;
     justify-content: center;
     align-items: center;
-    padding: 0 3em;
+    max-width: 90vw;
 }
 
-math-field::part(menu-toggle) {
-    display: none;
-}
+@media(orientation: portrait) {
+    .settings-wrapper {
+        flex-direction: column-reverse;
+    }
 
-math-field::part(virtual-keyboard-toggle) {
-    display: none;
+    .settings {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
 }
-
