@@ -7,21 +7,54 @@
   </head>
   <body>
     <div class="settings-wrapper">
+      <main></main>
       <div class="general-column"> 
+        <div class="buttons">
+          <button id="save-button">Save as File</button>
+          <button id="copy-url-button">Copy URL with Equation Data</button>
+        </div>
+        <div class="buttons">
+          <button id="load-button">Load a File</button>
+          <label>
+            Load an Example
+            <select name="example" id="load-example">
+              <option value=""></option>
+              <option value="simple-example">Simple Example</option>
+              <option value="colour-example">Colour Example</option>
+              <option value="mandelbrot">Mandelbrot Set Zoom</option>
+              <option value="julia">Julia Sets</option>
+              <option value="ray-tracing-1">Ray Tracing I</option>
+              <option value="ray-tracing-2">Ray Tracing II</option>
+            </select>
+          </label>
+        </div>
+        <div class="buttons">
+          <label>
+            Colour
+            <select name="colour-mode" id="colour-mode">
+              <option value="greyscale">Greyscale</option>
+              <option value="rgb">RGB</option>
+            </select>
+          </label>
+          <label>
+            Frame Rate
+            <input type="number" min="1" max="1000" name="canvas-frame-rate-input" id="canvas-frame-rate-input" value="60">
+          </label>
+        </div>
+        <div class="buttons">
+          <label>
+            Width
+            <input type="number" min="1" max="10000" name="canvas-width-input" id="canvas-width-input" value="300">
+          </label>
+          <label>
+            Height
+            <input type="number" min="1" max="10000" name="canvas-height-input" id="canvas-height-input" value="300">
+          </label>
+        </div>
         <div class="buttons">
           <button id="animate-button">Animate</button>
           <button id="add-user-function-button">Add Function</button>
           <button id="add-user-constant-button">Add Constant</button>
-          <button id="save-button">Save as File</button>
-          <select name='example' id="load-example">
-            <option value="">Load an Example</option>
-            <option value="mandelbrot">Mandelbrot Set Zoom</option>
-            <option value="julia">Julia Sets</option>
-            <option value="ray-tracing-1">Ray Tracing I</option>
-            <option value="ray-tracing-2">Ray Tracing II</option>
-          </select>
-          <button id="load-button">Load a File</button>
-          <button id="copy-url-button">Copy URL with Equation Data</button>
         </div>
         <div class="settings">
           <div>
@@ -52,6 +85,8 @@
               <math-field id="max-y">1</math-field>
             </p>
           </div>
+        </div>
+        <div class="settings">
           <div>
             <p>
               One second is equal to
@@ -63,12 +98,15 @@
         </div>
         <div class="main-function-definition">
           <div>
-            <math-field readonly>
-              \mathrm{brightness}: \R \times \R \times \R \to \R
+            <math-field readonly id="main-function-signature">
+              \mathrm{brightness}: \R \times \R \times \R \to
+            </math-field>
+            <math-field readonly id="main-function-output-signature">
+              \R
             </math-field>
           </div>
           <div>
-            <math-field readonly>
+            <math-field readonly id="main-function-definition">
               \mathrm{brightness}(x, y, t) = \;
             </math-field>
             <math-field id="equation">
@@ -77,7 +115,6 @@
           </div>
         </div>
       </div>
-      <main></main>
     </div>
     <div id="user-function-list">
       <template id="user-function-template">
