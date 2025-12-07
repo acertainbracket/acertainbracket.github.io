@@ -18,28 +18,30 @@ html, body {
 body {
     padding-top: 1em;
     padding-bottom: 1em;
-    gap: 1em;
+    gap: 0.5em;
 }
 
 .settings-wrapper {
     display: flex;
-    flex-direction: row;
-    gap: 2em;
-    align-items: center;
+    flex-direction: row-reverse;
+    flex-wrap: wrap;
+    gap: 0.5em;
+    align-items: flex-start;
+    justify-content: center;
     max-width: 90vw;
 }
 
 .general-column {
     display: flex;
     flex-direction: column;
-    gap: 2em;
+    gap: 0.5em;
     align-items: center;
 }
 
 .buttons {
     display: flex;
     flex-direction: row;
-    gap: 1em;
+    gap: 0.5em;
     align-items: center;
     flex-wrap: wrap;
     justify-content: center;
@@ -53,10 +55,14 @@ body {
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 2em;
+    gap: 0.5em;
     align-items: center;
     justify-content: center;
-    max-width: 90vw;
+    max-width: calc(100vw - 4ch);
+}
+
+.settings math-field:not([readonly]) {
+    margin: 0.25ch;
 }
 
 p {
@@ -72,6 +78,10 @@ canvas {
 
 .text-input {
     display: inline-block;
+}
+
+input[type=number] {
+    width: 8ch;
 }
 
 .main-function-definition, .user-function-definition {
@@ -135,6 +145,16 @@ math-field[readonly] {
     tabindex: -1;
 }
 
+math-field::part(container) {
+    padding: 0;
+    margin: 0;
+}
+
+math-field::part(content) {
+    padding: 0.25ch;
+    margin: 0;
+}
+
 math-field[readonly]::part(container) {
     padding: 0;
     margin: 0;
@@ -157,21 +177,11 @@ math-field::part(virtual-keyboard-toggle) {
 
 #user-function-list, #user-constant-list{
     display: flex;
-    gap: 1em;
+    gap: 0.5em;
     flex-direction: row;
     flex-wrap: wrap;
+    align-items: flex-start;
     justify-content: center;
-    align-items: center;
     max-width: 90vw;
 }
 
-@media(orientation: portrait) {
-    .settings-wrapper {
-        flex-direction: column-reverse;
-    }
-
-    .settings {
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-}

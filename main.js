@@ -36,7 +36,9 @@ function onModuleLoad(ce, p, me) {
   new p(sketch);
 }
 
-const side = 256;
+let canvasWidth = 300;
+let canvasHeight = 300;
+let canvasFrameRate = 60;
 
 const reverseMapping = mapping => Object.fromEntries(
   Object.entries(mapping).map(([a,b]) => [b,a])
@@ -57,6 +59,10 @@ const configSelectorsMap = {
   "#max-y": "f",
   "#unit-t": "g",
   "#equation": "h",
+  "#colour-mode": "i",
+  "#canvas-width-input": "j",
+  "#canvas-height-input": "k",
+  "#canvas-frame-rate-input": "l",
 };
 const configSelectorsReverseMap = reverseMapping(configSelectorsMap);
 const configSelectors = Object.keys(configSelectorsMap);
@@ -92,6 +98,7 @@ brightnessEquationElement.inlineShortcuts = {
 
 let objIterations = {};
 let symbolsMap = {};
+let mainOutputGLSLSignature = "float";
 
 let t0;
 let s;
@@ -100,22 +107,28 @@ let animate;
 
 let sketch = p5 => {
   p5.setup = () => {
-    p5.createCanvas(side, side, p5.WEBGL);
+    p5.createCanvas(canvasWidth, canvasHeight, p5.WEBGL);
     p5.pixelDensity(1);
     p5.noStroke();
-    p5.frameRate(20);
+    p5.frameRate(canvasFrameRate);
     p5.background("white");
     p5.textAlign(p5.CENTER, p5.CENTER);
     p5.text("Loading...", p5.width / 2, p5.height / 2);
     p5.describe("An animation written with math.");
 
     const animateButton = p5.select("#animate-button");
+    const canvasWidthInput = p5.select("#canvas-width-input");
+    const canvasHeightInput = p5.select("#canvas-height-input");
+    const canvasFrameRateInput = p5.select("#canvas-frame-rate-input");
+
     animate = () => {
       try {
+        p5.frameRate(canvasFrameRate);
+        p5.resizeCanvas(canvasWidth, canvasHeight);
         s = p5.createShader(...generateGLSL());
         p5.shader(s);
-        s.setUniform("width", side);
-        s.setUniform("height", side);
+        s.setUniform("width", canvasWidth);
+        s.setUniform("height", canvasHeight);
         s.setUniform("min_value",
           document.querySelector("#min-value").expression.compile()());
         s.setUniform("max_value",
@@ -132,19 +145,23 @@ let sketch = p5 => {
           document.querySelector("#unit-t").expression.compile()());
         t0 = p5.millis();
       } catch (e) {
-        s = null;
         console.error(e);
+        s = null;
       }
     };
     animateButton.mouseClicked(animate);
     animate();
+
+    canvasWidthInput.changed(event => canvasWidth = window.parseInt(event.target.value));
+    canvasHeightInput.changed(event => canvasHeight = window.parseInt(event.target.value));
+    canvasFrameRateInput.changed(event => canvasFrameRate = window.parseInt(event.target.value));
   }
 
   p5.draw = () => {
     if (s) {
       s.setUniform("time", (p5.millis() - t0) / 1000)
       try {
-        p5.plane(side, side);
+        p5.plane(p5.width, p5.height);
       } catch (e) {
         s = null;
         console.error(e);
@@ -289,7 +306,7 @@ function declareFunctions(definitionElements) {
   }
 
   const functionDeclarations = [];
-  const allSignatures = new Set();
+  const allSignatures = new Set(["float_float_float"]);
 
   for (let definitionElement of definitionElements) {
     const symbolElement =
@@ -311,7 +328,7 @@ function declareFunctions(definitionElements) {
       "RealNumbers2": "vec2",
       "RealNumbers3": "vec3",
       "RealNumbers4": "vec4",
-      "R__3_doublestruck": "vec3",
+      //"R__3_doublestruck": "vec3",
     }
 
     const inputSignatureElement =
@@ -650,19 +667,23 @@ float tanh(float x) {
 ${functionDeclarationStrings.join("")}
 ${iterationDeclarationStrings.join("")}
 
-float brightness(float x, float y, float t) {
+${mainOutputGLSLSignature} brightness(float x, float y, float t) {
   return ${brightnessExpression};
 }
 
 void main() {
   float x_value = min_x + (max_x - min_x) * gl_FragCoord.x / width;
   float y_value = min_y + (max_y - min_y) * gl_FragCoord.y / height;
-  float color = brightness(x_value, y_value, time * unit_t);
-  gl_FragColor = vec4(vec3((color - min_value)/(max_value-min_value)), 1.0);
+  ${mainOutputGLSLSignature} outputValue = brightness(x_value, y_value, time * unit_t);
+  ${mainOutputGLSLSignature === "float_float_float" ? 
+      String.raw`vec3 colour = vec3(outputValue.arg0, outputValue.arg1, outputValue.arg2);` :
+      String.raw`vec3 colour = vec3(outputValue);`
+  }
+  gl_FragColor = vec4((colour - vec3(min_value))/(max_value-min_value), 1.0);
 }
 `;
   console.log(fragSrc.split("\n").map((line, index) =>
-    (index + 1).toString().padStart(3, " ") + line
+    (index + 1).toString().padStart(3, " ") + " " + line
   ).join("\n"));
 
   return [vertSrc, fragSrc];
@@ -819,6 +840,8 @@ document.querySelector("#save-button").onclick = () => {
 async function loadExample(example) {
   const examplesPath = "/examples/";
   const valueToExampleFile = {
+    "simple-example": "simple-example.json",
+    "colour-example": "colour-example.json",
     "mandelbrot": "mandelbrot.json",
     "julia": "julia.json",
     "ray-tracing-1": "ray-tracing-1.json",
@@ -868,6 +891,10 @@ function loadEquationsFromObject(data) {
       }
     }
   }
+  updateColourMode(document.querySelector("#colour-mode").value);
+  canvasWidth = window.parseInt(document.querySelector("#canvas-width-input").value);
+  canvasHeight = window.parseInt(document.querySelector("#canvas-height-input").value);
+  canvasFrameRate = window.parseInt(document.querySelector("#canvas-frame-rate-input").value);
 }
 
 function base64Encode(s) {
@@ -888,6 +915,30 @@ document.querySelector("#copy-url-button").onclick = e => {
   setTimeout(() => {
     e.target.innerText = originalText;
   }, 3000);
+}
+
+document.querySelector("#colour-mode").onchange = e => {
+  updateColourMode(e.target.value);
+}
+
+function updateColourMode(colourMode) {
+  const mainSignature = document.querySelector("#main-function-signature");
+  const mainOutput = document.querySelector("#main-function-output-signature");
+  const mainDefinition = document.querySelector("#main-function-definition");
+  const mapping = {
+    "greyscale": ["Brightness", String.raw`\R`, "float"],
+    "rgb": ["Colour", String.raw`\R \times \R \times \R`, "float_float_float"],
+  };
+  if (mapping?.[colourMode]) {
+    const [name, outputSignature, GLSLSignature] = mapping[colourMode];
+    mainSignature.value =
+      String.raw`\mathrm{${name}}: \R \times \R \times \R \to`;
+    mainOutput.value = outputSignature
+    mainDefinition.value =
+      String.raw`\mathrm{${name}}(x, y, t) = \;`;
+
+    mainOutputGLSLSignature = GLSLSignature;
+  }
 }
 
 document.querySelector("#load-example").onchange = async e => {
