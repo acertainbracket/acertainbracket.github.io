@@ -18,13 +18,14 @@
           <label>
             Load an Example
             <select name="example" id="load-example">
-              <option value=""></option>
+              <option selected value=""></option>
               <option value="simple-example">Simple Example</option>
               <option value="colour-example">Colour Example</option>
-              <option value="mandelbrot">Mandelbrot Set Zoom</option>
+              <option value="mandelbrot">Mandelbrot Set</option>
               <option value="julia">Julia Sets</option>
               <option value="ray-tracing-1">Ray Tracing I</option>
               <option value="ray-tracing-2">Ray Tracing II</option>
+              <option value="ray-tracing-3">Ray Tracing III</option>
             </select>
           </label>
         </div>
@@ -32,16 +33,27 @@
           <label>
             Colour
             <select name="colour-mode" id="colour-mode">
-              <option value="greyscale">Greyscale</option>
+              <option selected value="greyscale">Greyscale</option>
               <option value="rgb">RGB</option>
             </select>
           </label>
           <label>
-            Frame Rate
-            <input type="number" min="1" max="1000" name="canvas-frame-rate-input" id="canvas-frame-rate-input" value="60">
+            Mode
+            <select name="animation-mode" id="animation-mode">
+              <option value="image">Image</option>
+              <option selected value="video">Video</option>
+            </select>
           </label>
         </div>
         <div class="buttons">
+          <label>
+            Frame Rate
+            <input type="number" min="1" max="1000" name="canvas-frame-rate-input" id="canvas-frame-rate-input" value="60">
+          </label>
+          <label>
+            Rendering Speed (%)
+            <input type="number" min="0" max="100" name="canvas-rendering-speed-input" id="canvas-rendering-speed-input" value="0.1" disabled>
+          </label>
           <label>
             Width
             <input type="number" min="1" max="10000" name="canvas-width-input" id="canvas-width-input" value="300">
@@ -98,8 +110,14 @@
         </div>
         <div class="main-function-definition">
           <div>
-            <math-field readonly id="main-function-signature">
-              \mathrm{brightness}: \R \times \R \times \R \to
+            <math-field readonly id="main-function-name">
+              \mathrm{Brightness}:
+            </math-field>
+            <math-field readonly id="main-function-input-signature">
+              \R \times \R \times \R
+            </math-field>
+            <math-field readonly>
+              \to
             </math-field>
             <math-field readonly id="main-function-output-signature">
               \R
@@ -107,7 +125,7 @@
           </div>
           <div>
             <math-field readonly id="main-function-definition">
-              \mathrm{brightness}(x, y, t) = \;
+              \mathrm{Brightness}(x, y, t) = \;
             </math-field>
             <math-field id="equation">
               xy \cos^2 t

@@ -63,8 +63,9 @@ const configSelectorsMap = {
   "#canvas-width-input": "j",
   "#canvas-height-input": "k",
   "#canvas-frame-rate-input": "l",
+  "#animation-mode": "m",
+  "#canvas-rendering-speed-input": "n",
 };
-const configSelectorsReverseMap = reverseMapping(configSelectorsMap);
 const configSelectors = Object.keys(configSelectorsMap);
 
 const functionSelectorsMap = {
@@ -99,9 +100,13 @@ brightnessEquationElement.inlineShortcuts = {
 let objIterations = {};
 let symbolsMap = {};
 let mainOutputGLSLSignature = "float";
+let mainInputGLSLSignature = "float x, float y, float t";
+let mainInputGLSLVariables = "x, y, t";
+let canvasAnimationMode = "video";
 
 let t0;
 let s;
+let numRenderedFrames;
 
 let animate;
 
@@ -123,16 +128,17 @@ let sketch = p5 => {
 
     animate = () => {
       try {
-        p5.frameRate(canvasFrameRate);
         p5.resizeCanvas(canvasWidth, canvasHeight);
         s = p5.createShader(...generateGLSL());
         p5.shader(s);
-        s.setUniform("width", canvasWidth);
-        s.setUniform("height", canvasHeight);
+        canvasAnimationMode =
+          document.querySelector("#animation-mode").value;
         s.setUniform("min_value",
           document.querySelector("#min-value").expression.compile()());
         s.setUniform("max_value",
           document.querySelector("#max-value").expression.compile()());
+        s.setUniform("width", canvasWidth);
+        s.setUniform("height", canvasHeight);
         s.setUniform("min_x",
           document.querySelector("#min-x").expression.compile()());
         s.setUniform("max_x",
@@ -143,7 +149,14 @@ let sketch = p5 => {
           document.querySelector("#max-y").expression.compile()());
         s.setUniform("unit_t",
           document.querySelector("#unit-t").expression.compile()());
-        t0 = p5.millis();
+        if (canvasAnimationMode === "video") {
+          p5.frameRate(canvasFrameRate);
+          t0 = p5.millis();
+        } else if (canvasAnimationMode === "image") {
+          p5.background(0);
+          numRenderedFrames = 0;
+          p5.frameRate(60);
+        }
       } catch (e) {
         console.error(e);
         s = null;
@@ -159,9 +172,24 @@ let sketch = p5 => {
 
   p5.draw = () => {
     if (s) {
-      s.setUniform("time", (p5.millis() - t0) / 1000)
       try {
-        p5.plane(p5.width, p5.height);
+        if (canvasAnimationMode === "video") {
+          s.setUniform("time", (p5.millis() - t0) / 1000)
+          p5.plane(p5.width, p5.height);
+        } else if (canvasAnimationMode === "image") {
+          const renderingSpeed = document.querySelector("#canvas-rendering-speed-input").value;
+          const area = p5.width * p5.height;
+          const side = Math.ceil(Math.sqrt(renderingSpeed * area));
+          const rows = Math.ceil(p5.width / side);
+          const columns = Math.ceil(p5.height / side);
+          const row = numRenderedFrames % rows;
+          const column = Math.floor(numRenderedFrames / rows);
+          if (row <= rows && column <= columns) {
+            p5.translate((row + 0.5) * side - p5.width / 2, (column + 0.5) * side - p5.height / 2);
+            p5.plane(side, side);
+            numRenderedFrames += 1;
+          }
+        }
       } catch (e) {
         s = null;
         console.error(e);
@@ -667,14 +695,15 @@ float tanh(float x) {
 ${functionDeclarationStrings.join("")}
 ${iterationDeclarationStrings.join("")}
 
-${mainOutputGLSLSignature} brightness(float x, float y, float t) {
+${mainOutputGLSLSignature} brightness(${mainInputGLSLSignature}) {
   return ${brightnessExpression};
 }
 
 void main() {
-  float x_value = min_x + (max_x - min_x) * gl_FragCoord.x / width;
-  float y_value = min_y + (max_y - min_y) * gl_FragCoord.y / height;
-  ${mainOutputGLSLSignature} outputValue = brightness(x_value, y_value, time * unit_t);
+  float x = min_x + (max_x - min_x) * gl_FragCoord.x / width;
+  float y = min_y + (max_y - min_y) * gl_FragCoord.y / height;
+  float t = time * unit_t;
+  ${mainOutputGLSLSignature} outputValue = brightness(${mainInputGLSLVariables});
   ${mainOutputGLSLSignature === "float_float_float" ? 
       String.raw`vec3 colour = vec3(outputValue.arg0, outputValue.arg1, outputValue.arg2);` :
       String.raw`vec3 colour = vec3(outputValue);`
@@ -788,12 +817,14 @@ document.querySelector("#add-user-constant-button").onclick = () => {
 };
 
 function convertToJSON() {
-  const settingsEntries = configSelectors.map(
-    selector => [
-      configSelectorsMap[selector],
-      document.querySelector(selector).value
-    ]
-  );
+  const settingsEntries = configSelectors
+    .filter(selector => !document.querySelector(selector).hasAttribute("disabled"))
+    .map(
+      selector => [
+        configSelectorsMap[selector],
+        document.querySelector(selector).value
+      ]
+    );
   const settings = Object.fromEntries(settingsEntries);
   const functions = Array.from(
     document.querySelectorAll(".user-function-definition")
@@ -846,6 +877,7 @@ async function loadExample(example) {
     "julia": "julia.json",
     "ray-tracing-1": "ray-tracing-1.json",
     "ray-tracing-2": "ray-tracing-2.json",
+    "ray-tracing-3": "ray-tracing-3.json",
   }
 
   const exampleFile = valueToExampleFile?.[example];
@@ -891,10 +923,13 @@ function loadEquationsFromObject(data) {
       }
     }
   }
-  updateColourMode(document.querySelector("#colour-mode").value);
-  canvasWidth = window.parseInt(document.querySelector("#canvas-width-input").value);
-  canvasHeight = window.parseInt(document.querySelector("#canvas-height-input").value);
-  canvasFrameRate = window.parseInt(document.querySelector("#canvas-frame-rate-input").value);
+  updateModes();
+  canvasWidth =
+    window.parseInt(document.querySelector("#canvas-width-input").value);
+  canvasHeight =
+    window.parseInt(document.querySelector("#canvas-height-input").value);
+  canvasFrameRate =
+    window.parseInt(document.querySelector("#canvas-frame-rate-input").value);
 }
 
 function base64Encode(s) {
@@ -917,27 +952,72 @@ document.querySelector("#copy-url-button").onclick = e => {
   }, 3000);
 }
 
-document.querySelector("#colour-mode").onchange = e => {
-  updateColourMode(e.target.value);
-}
+document.querySelector("#colour-mode").onchange = updateModes;
+document.querySelector("#animation-mode").onchange = updateModes;
 
-function updateColourMode(colourMode) {
-  const mainSignature = document.querySelector("#main-function-signature");
+function updateModes() {
+  const colourMode = document.querySelector("#colour-mode").value;
+  const animationMode = document.querySelector("#animation-mode").value;
+
+  const mainName = document.querySelector("#main-function-name");
+  const mainInput = document.querySelector("#main-function-input-signature");
   const mainOutput = document.querySelector("#main-function-output-signature");
   const mainDefinition = document.querySelector("#main-function-definition");
-  const mapping = {
-    "greyscale": ["Brightness", String.raw`\R`, "float"],
-    "rgb": ["Colour", String.raw`\R \times \R \times \R`, "float_float_float"],
-  };
-  if (mapping?.[colourMode]) {
-    const [name, outputSignature, GLSLSignature] = mapping[colourMode];
-    mainSignature.value =
-      String.raw`\mathrm{${name}}: \R \times \R \times \R \to`;
-    mainOutput.value = outputSignature
-    mainDefinition.value =
-      String.raw`\mathrm{${name}}(x, y, t) = \;`;
 
-    mainOutputGLSLSignature = GLSLSignature;
+  const colourModeMapping = {
+    "greyscale": [
+      "Brightness",
+      String.raw`\R`, "float",
+    ],
+    "rgb": [
+      "Colour",
+      String.raw`\R \times \R \times \R`,
+      "float_float_float",
+    ],
+  };
+
+  const animationModeMapping = {
+    "video": [
+      String.raw`\R \times \R \times \R`,
+      "x, y, t",
+      "float x, float y, float t",
+    ],
+    "image": [
+      String.raw`\R \times \R`,
+      "x, y",
+      "float x, float y",
+    ],
+  }
+
+  const [
+    name,
+    outputSignature,
+    outputGLSLSignature
+  ] = colourModeMapping?.[colourMode] ?? colourModeMapping["greyscale"];
+
+  const [
+    inputSignature,
+    inputVariables,
+    inputGLSLSignature,
+  ] = animationModeMapping?.[animationMode] ?? animationModeMapping["video"];
+
+  mainName.value =
+    String.raw`\mathrm{${name}}:`;
+  mainOutput.value = outputSignature;
+  mainInput.value = inputSignature;
+  mainDefinition.value =
+    String.raw`\mathrm{${name}}(${inputVariables}) = \;`;
+
+  mainOutputGLSLSignature = outputGLSLSignature;
+  mainInputGLSLSignature = inputGLSLSignature;
+  mainInputGLSLVariables = inputVariables;
+
+  if (animationMode === "video") {
+    document.querySelector("#canvas-rendering-speed-input").setAttribute("disabled", "");
+    document.querySelector("#canvas-frame-rate-input").removeAttribute("disabled");
+  } else if (animationMode === "image") {
+    document.querySelector("#canvas-frame-rate-input").setAttribute("disabled", "");
+    document.querySelector("#canvas-rendering-speed-input").removeAttribute("disabled");
   }
 }
 
