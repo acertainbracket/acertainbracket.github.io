@@ -36,6 +36,22 @@ function onModuleLoad(ce, p, me) {
   new p(sketch);
 }
 
+const fixPad = (s, n) => {
+  const padLength = l => {
+    let i = 0;
+    while (i < l.length) {
+        if (l.charAt(i) != " ") {
+          return i;
+        }
+        i++;
+    }
+    return 0;
+  }
+  
+  const lines = s.split("\n").splice(1);
+  return lines.map(l => l.substring(padLength(lines[0]))).join("\n")
+}
+
 let canvasWidth = 300;
 let canvasHeight = 300;
 let canvasFrameRate = 60;
@@ -99,6 +115,7 @@ brightnessEquationElement.inlineShortcuts = {
 
 let objIterations = {};
 let symbolsMap = {};
+let symbolLineMap = new Map();
 let mainOutputGLSLSignature = "float";
 let mainInputGLSLSignature = "float x, float y, float t";
 let mainInputGLSLVariables = "x, y, t";
@@ -125,11 +142,13 @@ let sketch = p5 => {
     const canvasWidthInput = p5.select("#canvas-width-input");
     const canvasHeightInput = p5.select("#canvas-height-input");
     const canvasFrameRateInput = p5.select("#canvas-frame-rate-input");
+    let vertSrc, fragSrc;
 
     animate = () => {
       try {
         p5.resizeCanvas(canvasWidth, canvasHeight);
-        s = p5.createShader(...generateGLSL());
+        [vertSrc, fragSrc] = generateGLSL();
+        s = p5.createShader(vertSrc, fragSrc);
         p5.shader(s);
         canvasAnimationMode =
           document.querySelector("#animation-mode").value;
@@ -157,8 +176,10 @@ let sketch = p5 => {
           numRenderedFrames = 0;
           p5.frameRate(60);
         }
+        parseErrors(fragSrc, "");
       } catch (e) {
         console.error(e);
+        parseErrors(fragSrc, e.toString());
         s = null;
       }
     };
@@ -196,6 +217,50 @@ let sketch = p5 => {
       }
     } else {
       p5.background("red");
+    }
+  }
+}
+
+const parseErrors = (fragSrc, errorString) => {
+  const extraErrors = Array.from(errorString.matchAll(/:\d+/g)).map(match => match[0].substring(1));
+  const lines = fragSrc.split("\n");
+
+  console.log(lines.map((line, index) =>
+    (index + 1).toString().padStart(3, " ") + " " + line
+  ).join("\n"));
+
+  let lineIndex = 0;
+  let symbolIndex = 0;
+  const symbols = Object.keys(symbolsMap).concat(["brightness"]);
+  while (symbolIndex < symbols.length) {
+    while (lineIndex < lines.length && !lines[lineIndex].includes(` ${symbols[symbolIndex]}(`)) {
+      symbolLineMap.set(symbols[symbolIndex], lineIndex + 2);
+      lineIndex++;
+    }
+    symbolIndex++;
+  }
+
+  Array.from(document.querySelectorAll(".error")).forEach(element => element.classList.remove("error"));
+
+  const errorLines = lines
+    .map((line, index) => [line, index + 1])
+    .filter(([line, lineNumber]) => line.includes("ERROR"))
+    .map(([line, lineNumber]) => lineNumber)
+    .concat(extraErrors);
+
+  for (let errorLine of Array.from(new Set(errorLines))) {
+    let errorSymbol = null;
+    for (let [symbol, symbolLine] of Array.from(symbolLineMap.entries()).toReversed()) {
+      if (errorLine >= symbolLine) {
+        errorSymbol = symbol;
+        break;
+      }
+    }
+
+    if (errorSymbol == "brightness") {
+      document.querySelector("#equation").classList.add("error");
+    } else {
+      symbolsMap[errorSymbol].nativeElement.classList.add("error");
     }
   }
 }
@@ -399,7 +464,11 @@ function declareFunctions(definitionElements) {
       outputSignature
     });
 
-    symbolsMap[functionSymbol] = {inputSignature, outputSignature};
+    symbolsMap[functionSymbol] = {
+      nativeElement: equationElement,
+      inputSignature,
+      outputSignature
+    };
   }
 
   return {functionDeclarations, allSignatures};
@@ -411,8 +480,8 @@ function defineConstants(constantElements) {
     const valueElement = constantElement.querySelector(".user-constant-value");
     const symbolString = JSON.parse(symbolElement.getValue("math-json"));
     const valueString = mj2gl(JSON.parse(valueElement.getValue("math-json")));
-    return `
-  #define ${symbolString} ${valueString}`;
+    return fixPad(`
+      #define ${symbolString} ${valueString}`);
   });
 }
 
@@ -422,61 +491,60 @@ function generateFunctions(
   definitionElements,
   equationComputeEngine,
 ) {
-  const structDeclarationStrings = Array.from(allSignatures).map(structName => `
-struct ${structName} {
-  ${structName.split("_").map((type, i) => `${type} arg${i};`).join("\n    ")}
-};`
-  );
+  const structDeclarationStrings = Array.from(allSignatures).map(structName => fixPad(`
+    struct ${structName} {
+      ${structName.split("_").map((type, i) => `${type} arg${i};`).join(`
+      `)}
+    };`
+  ));
 
-  const functionDeclarationStrings = Array.from(allSignatures).map(structName => `
+  const functionDeclarationStrings = Array.from(allSignatures).map(structName => fixPad(`
     ${structName} to_tuple(${structName.split("_").map((type, i) => `${type} arg${i}`).join(", ")}){
-  return ${structName}(${structName.split("_").map((type, i) => `arg${i}`).join(", ")});
-}`
-  ).concat(functionDeclarations.toReversed()
-    .map(({
-      equationElement,
-      functionSymbol,
-      variables,
-      inputSignature,
-      outputSignature,
-    }) => {
-      const math = mj2gl(JSON.parse(equationElement.getValue("math-json")))
-      return (`
+      return ${structName}(${structName.split("_").map((type, i) => `arg${i}`).join(", ")});
+    }`)
+  ).concat(functionDeclarations.toReversed().map(({
+    equationElement,
+    functionSymbol,
+    variables,
+    inputSignature,
+    outputSignature,
+  }) => {
+    const math = mj2gl(JSON.parse(equationElement.getValue("math-json")))
+    return fixPad(`
         ${outputSignature.join("_")} ${functionSymbol}(${
           variables.map((variable, i) => `${inputSignature[i]} ${variable}`).join(", ")
         }) {
-  return ${math};
-}` + (inputSignature.length > 1 ? `
-  ${outputSignature.join("_")} ${functionSymbol}(${inputSignature.join("_")} tuple) {
-  return ${functionSymbol}(${inputSignature.map((_, i) => `tuple.arg${i}`).join(", ")});
-}` : "") + (Object.hasOwn(objIterations, functionSymbol) ?
-  (objIterations[functionSymbol].map(({symbol, amount}) => `
-    ${outputSignature.join("_")} iterate_${symbol}_${amount}(${inputSignature.join("_")} arg) {
-  ${outputSignature.join("_")} value = arg;
-  for (int i = 0; i < ${amount}; i++) {
-    value = ${symbol}(value);
-  }
-  return value;
-}` + (inputSignature.length > 1 ? `
-  ${outputSignature.join("_")} iterate_${symbol}_${amount}(${
-    inputSignature.map((type, i) => `${type} arg${i}`).join(", ")
-  }) {
-  ${outputSignature.join("_")} value = to_tuple(${inputSignature.map((type, i) => `arg${i}`).join(",")});
-  for (int i = 0; i < ${amount}; i++) {
-    value = ${symbol}(value);
-  }
-  return value;
-}` : ""))).join("") : ""))
-    }).toReversed());
+          return ${math};
+        }`) + (inputSignature.length > 1 ? "\n" + fixPad(`
+        ${outputSignature.join("_")} ${functionSymbol}(${inputSignature.join("_")} tuple) {
+          return ${functionSymbol}(${inputSignature.map((_, i) => `tuple.arg${i}`).join(", ")});
+        }`) : "") + "\n" + (Object.hasOwn(objIterations, functionSymbol) ?  (objIterations[functionSymbol].map(({symbol, amount}) => (inputSignature.length > 1 ? fixPad(`
+        ${outputSignature.join("_")} iterate_${symbol}_${amount}(${
+          inputSignature.map((type, i) => `${type} arg${i}`).join(", ")
+        }) {
+          ${outputSignature.join("_")} value = to_tuple(${inputSignature.map((type, i) => `arg${i}`).join(",")});
+          for (int i = 0; i < ${amount}; i++) {
+            value = ${symbol}(value);
+          }
+          return value;
+        }`) : "") + "\n" + fixPad(`
+        ${outputSignature.join("_")} iterate_${symbol}_${amount}(${inputSignature.join("_")} arg) {
+          ${outputSignature.join("_")} value = arg;
+          for (int i = 0; i < ${amount}; i++) {
+            value = ${symbol}(value);
+          }
+          return value;
+        }`))).join("") : "")
+  }).toReversed());
 
   const iterationDeclarationStrings = [];
-
   return {structDeclarationStrings, functionDeclarationStrings, iterationDeclarationStrings};
 }
 
 function generateGLSL() {
   objIterations = {};
   symbolsMap = {};
+  symbolLineMap = new Map();
 
   const constantElements =
     Array.from(document.querySelectorAll(".user-constant-definition"));
@@ -528,192 +596,202 @@ function generateGLSL() {
     equationComputeEngine
   );
 
-  const vertSrc = `
-precision highp float;
-uniform mat4 uModelViewMatrix;
-uniform mat4 uProjectionMatrix;
-attribute vec3 aPosition;
-attribute vec2 aTexCoord;
-varying vec2 vTexCoord;
+  const vertSrc = fixPad(`
+    precision highp float;
+    uniform mat4 uModelViewMatrix;
+    uniform mat4 uProjectionMatrix;
+    attribute vec3 aPosition;
+    attribute vec2 aTexCoord;
+    varying vec2 vTexCoord;
 
-void main() {
-  vTexCoord = aTexCoord;
-  vec4 positionVec4 = vec4(aPosition, 1.0);
-  gl_Position = uProjectionMatrix * uModelViewMatrix * positionVec4;
-}
-`;
+    void main() {
+      vTexCoord = aTexCoord;
+      vec4 positionVec4 = vec4(aPosition, 1.0);
+      gl_Position = uProjectionMatrix * uModelViewMatrix * positionVec4;
+    }`);
 
-  let fragSrc = `
-#define Pi           3.1415926538
-#define ExponentialE 2.7182818284
-#define CustomImaginaryUnit complex(0.0, 1.0)
-  ${constantDefinitionStrings.join("")}
+  let fragSrc = fixPad(`
+    #define Pi 3.1415926538
+    #define ExponentialE 2.7182818284
+    #define CustomImaginaryUnit complex(0.0, 1.0)
 
-precision highp float;
-uniform float width;
-uniform float height;
-uniform float time;
-uniform float max_value;
-uniform float min_value;
-uniform float min_x;
-uniform float max_x;
-uniform float min_y;
-uniform float max_y;
-uniform float unit_t;
+    ${
+      constantDefinitionStrings.join(`
+    `)}
 
-struct complex {
-  float re;
-  float im;
-};
-${structDeclarationStrings.join("")}
+    precision highp float;
+    uniform float width;
+    uniform float height;
+    uniform float time;
+    uniform float max_value;
+    uniform float min_value;
+    uniform float min_x;
+    uniform float max_x;
+    uniform float min_y;
+    uniform float max_y;
+    uniform float unit_t;
 
-float float_identity(float x) {
-  return x;
-}
-float real_part(float x) {
-  return x;
-}
-float real_part(complex z) {
-  return z.re;
-}
-complex injection_map(float x) {
-  return complex(x, 0.0);
-}
-complex injection_map(complex z) {
-  return z;
-}
-float abs(complex z) {
-  return sqrt(z.re * z.re + z.im * z.im);
-}
-complex negate(complex z) {
-  return complex(-z.re, -z.im);
-}
-float negate(float x) {
-  return -1. * x;
-}
-vec2 negate(vec2 v) {
-  return -1. * v;
-}
-vec3 negate(vec3 v) {
-  return -1. * v;
-}
-vec4 negate(vec4 v) {
-  return -1. * v;
-}
-complex add(float left, complex right) {
-  return complex(left + right.re, right.im);
-}
-complex add(complex left, float right) {
-  return complex(right + left.re, left.im);
-}
-complex add(complex left, complex right) {
-  return complex(left.re + right.re, left.im + right.im);
-}
-float add(float left, float right) {
-  return left + right;
-}
-vec2 add(vec2 left, vec2 right) {
-  return left+right;
-}
-vec3 add(vec3 left, vec3 right) {
-  return left+right;
-}
-vec4 add(vec4 left, vec4 right) {
-  return left+right;
-}
-complex multiply(complex left, float right) {
-  return complex(right * left.re, right * left.im);
-}
-complex multiply(float left, complex right) {
-  return complex(left * right.re, left * right.im);
-}
-complex multiply(complex left, complex right) {
-  return complex(
-    left.re * right.re - left.im * right.im,
-    left.re * right.im + left.im * right.re
-  );
-}
-float multiply(float left, float right) {
-  return left * right;
-}
-vec2 multiply(vec2 left, float right) {
-  return right * left;
-}
-vec3 multiply(vec3 left, float right) {
-  return right * left;
-}
-vec4 multiply(vec4 left, float right) {
-  return right * left;
-}
-vec2 multiply(float left, vec2 right) {
-  return left * right;
-}
-vec3 multiply(float left, vec3 right) {
-  return left * right;
-}
-vec4 multiply(float left, vec4 right) {
-  return left * right;
-}
-float multiply(vec2 left, vec2 right) {
-  return dot(left,right);
-}
-float multiply(vec3 left, vec3 right) {
-  return dot(left,right);
-}
-float multiply(vec4 left, vec4 right) {
-  return dot(left,right);
-}
-vec3 divide(vec3 left, float right) {
-  return left / right;
-}
-complex divide(complex left, float right) {
-  return complex(left.re / right, left.im / right);
-}
-complex divide(float left, complex right) {
-  return complex(
-    right.re * left        / (right.re * right.re + right.im * right.im),
-    -1.0 * right.im * left / (right.re * right.re + right.im * right.im)
-  );
-}
-complex divide(complex left, complex right) {
-  return complex(
-    (left.re * right.re + left.im * right.im) /
-      (right.re * right.re + right.im * right.im),
-    (left.im * right.re - left.re * right.im) /
-      (right.re * right.re + right.im * right.im)
-  );
-}
-float divide(float left, float right) {
-  return left / right;
-}
-float atanh(float x) {
-  return 0.5 * (log(1.0 + x) - log(1.0 - x));
-}
-float tanh(float x) {
-  return (exp(2.0 * x) - 1.0)/(exp(2.0 * x) + 1.0); 
-}
-${functionDeclarationStrings.join("")}
-${iterationDeclarationStrings.join("")}
+    struct complex {
+      float re;
+      float im;
+    };
 
-${mainOutputGLSLSignature} brightness(${mainInputGLSLSignature}) {
-  return ${brightnessExpression};
-}
+    ${
+      structDeclarationStrings.map(declaration => declaration.split("\n").join(`
+    `)).join(`
+    `)}
 
-void main() {
-  float x = min_x + (max_x - min_x) * gl_FragCoord.x / width;
-  float y = min_y + (max_y - min_y) * gl_FragCoord.y / height;
-  float t = time * unit_t;
-  ${mainOutputGLSLSignature} outputValue = brightness(${mainInputGLSLVariables});
-  ${mainOutputGLSLSignature === "float_float_float" ? 
-      String.raw`vec3 colour = vec3(outputValue.arg0, outputValue.arg1, outputValue.arg2);` :
-      String.raw`vec3 colour = vec3(outputValue);`
-  }
-  gl_FragColor = vec4((colour - vec3(min_value))/(max_value-min_value), 1.0);
-}
-`;
-  console.log(fragSrc.split("\n").map((line, index) =>
-    (index + 1).toString().padStart(3, " ") + " " + line
-  ).join("\n"));
+    float float_identity(float x) {
+      return x;
+    }
+    float real_part(float x) {
+      return x;
+    }
+    float real_part(complex z) {
+      return z.re;
+    }
+    complex injection_map(float x) {
+      return complex(x, 0.0);
+    }
+    complex injection_map(complex z) {
+      return z;
+    }
+    float abs(complex z) {
+      return sqrt(z.re * z.re + z.im * z.im);
+    }
+    complex negate(complex z) {
+      return complex(-z.re, -z.im);
+    }
+    float negate(float x) {
+      return -1. * x;
+    }
+    vec2 negate(vec2 v) {
+      return -1. * v;
+    }
+    vec3 negate(vec3 v) {
+      return -1. * v;
+    }
+    vec4 negate(vec4 v) {
+      return -1. * v;
+    }
+    complex add(float left, complex right) {
+      return complex(left + right.re, right.im);
+    }
+    complex add(complex left, float right) {
+      return complex(right + left.re, left.im);
+    }
+    complex add(complex left, complex right) {
+      return complex(left.re + right.re, left.im + right.im);
+    }
+    float add(float left, float right) {
+      return left + right;
+    }
+    vec2 add(vec2 left, vec2 right) {
+      return left+right;
+    }
+    vec3 add(vec3 left, vec3 right) {
+      return left+right;
+    }
+    vec4 add(vec4 left, vec4 right) {
+      return left+right;
+    }
+    complex multiply(complex left, float right) {
+      return complex(right * left.re, right * left.im);
+    }
+    complex multiply(float left, complex right) {
+      return complex(left * right.re, left * right.im);
+    }
+    complex multiply(complex left, complex right) {
+      return complex(
+        left.re * right.re - left.im * right.im,
+        left.re * right.im + left.im * right.re
+      );
+    }
+    float multiply(float left, float right) {
+      return left * right;
+    }
+    vec2 multiply(vec2 left, float right) {
+      return right * left;
+    }
+    vec3 multiply(vec3 left, float right) {
+      return right * left;
+    }
+    vec4 multiply(vec4 left, float right) {
+      return right * left;
+    }
+    vec2 multiply(float left, vec2 right) {
+      return left * right;
+    }
+    vec3 multiply(float left, vec3 right) {
+      return left * right;
+    }
+    vec4 multiply(float left, vec4 right) {
+      return left * right;
+    }
+    float multiply(vec2 left, vec2 right) {
+      return dot(left,right);
+    }
+    float multiply(vec3 left, vec3 right) {
+      return dot(left,right);
+    }
+    float multiply(vec4 left, vec4 right) {
+      return dot(left,right);
+    }
+    vec3 divide(vec3 left, float right) {
+      return left / right;
+    }
+    complex divide(complex left, float right) {
+      return complex(left.re / right, left.im / right);
+    }
+    complex divide(float left, complex right) {
+      return complex(
+        right.re * left        / (right.re * right.re + right.im * right.im),
+        -1.0 * right.im * left / (right.re * right.re + right.im * right.im)
+      );
+    }
+    complex divide(complex left, complex right) {
+      return complex(
+        (left.re * right.re + left.im * right.im) /
+          (right.re * right.re + right.im * right.im),
+        (left.im * right.re - left.re * right.im) /
+          (right.re * right.re + right.im * right.im)
+      );
+    }
+    float divide(float left, float right) {
+      return left / right;
+    }
+    float atanh(float x) {
+      return 0.5 * (log(1.0 + x) - log(1.0 - x));
+    }
+    float tanh(float x) {
+      return (exp(2.0 * x) - 1.0)/(exp(2.0 * x) + 1.0); 
+    }
+
+    ${
+      functionDeclarationStrings.map(declaration => declaration.split("\n").join(`
+    `)).join(`
+    `)}
+
+    ${
+      iterationDeclarationStrings.map(declaration => declaration.split("\n").join(`
+    `)).join(`
+    `)}
+
+    ${mainOutputGLSLSignature} brightness(${mainInputGLSLSignature}) {
+      return ${brightnessExpression};
+    }
+
+    void main() {
+      float x = min_x + (max_x - min_x) * gl_FragCoord.x / width;
+      float y = min_y + (max_y - min_y) * gl_FragCoord.y / height;
+      float t = time * unit_t;
+      ${mainOutputGLSLSignature} outputValue = brightness(${mainInputGLSLVariables});
+      ${mainOutputGLSLSignature === "float_float_float" ? 
+        String.raw`vec3 colour = vec3(outputValue.arg0, outputValue.arg1, outputValue.arg2);` :
+        String.raw`vec3 colour = vec3(outputValue);`
+      }
+      gl_FragColor = vec4((colour - vec3(min_value))/(max_value-min_value), 1.0);
+    }`);
 
   return [vertSrc, fragSrc];
 }
