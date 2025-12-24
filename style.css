@@ -92,6 +92,10 @@ input[type=number] {
     gap: 0.5em;
 }
 
+.main-function-definition .error {
+    border: 1px solid red;
+}
+
 .user-constant-definition {
     display: flex;
     flex-direction: column;
@@ -104,6 +108,10 @@ input[type=number] {
     border: 1px dotted black;
     padding: 0.5em;
     max-width: 100%;
+}
+
+.user-function-definition:has(.error) {
+    border: 1px solid red;
 }
 
 .header-buttons {
