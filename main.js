@@ -19,14 +19,14 @@ if (nodeMode) {
   })
 }
 
-function onModuleLoad(ce, p, me) {
+async function onModuleLoad(ce, p, me) {
   ComputeEngine = ce;
   MathfieldElement = me;
 
   const url  = new URL(window.location.href);
   const example = url.searchParams.get("example");
   if (example) {
-    loadExample(example);
+    await loadExample(example);
   }
   const data = url.searchParams.get("data");
   if (data) {
@@ -80,7 +80,7 @@ const configSelectorsMap = {
   "#canvas-height-input": "k",
   "#canvas-frame-rate-input": "l",
   "#animation-mode": "m",
-  "#canvas-rendering-speed-input": "n",
+  "#canvas-rendering-time-input": "n",
 };
 const configSelectors = Object.keys(configSelectorsMap);
 
@@ -174,7 +174,7 @@ let sketch = p5 => {
         } else if (canvasAnimationMode === "image") {
           p5.background(0);
           numRenderedFrames = 0;
-          p5.frameRate(60);
+          p5.frameRate(20);
         }
         parseErrors(fragSrc, "");
       } catch (e) {
@@ -198,9 +198,11 @@ let sketch = p5 => {
           s.setUniform("time", (p5.millis() - t0) / 1000)
           p5.plane(p5.width, p5.height);
         } else if (canvasAnimationMode === "image") {
-          const renderingSpeed = document.querySelector("#canvas-rendering-speed-input").value;
+          const renderingTime = document.querySelector("#canvas-rendering-time-input").value;
+          const framesPerSecond = 20;
+          const numberOfFrames = framesPerSecond * renderingTime
           const area = p5.width * p5.height;
-          const side = Math.ceil(Math.sqrt(renderingSpeed * area));
+          const side = Math.ceil(Math.sqrt(area / numberOfFrames));
           const rows = Math.ceil(p5.width / side);
           const columns = Math.ceil(p5.height / side);
           const row = numRenderedFrames % rows;
@@ -974,7 +976,6 @@ async function loadExample(example) {
   }
   const data = await response.json();
   loadEquationsFromObject(data);
-  animate();
 }
 
 function loadEquationsFromObject(data) {
@@ -1091,11 +1092,11 @@ function updateModes() {
   mainInputGLSLVariables = inputVariables;
 
   if (animationMode === "video") {
-    document.querySelector("#canvas-rendering-speed-input").setAttribute("disabled", "");
+    document.querySelector("#canvas-rendering-time-input").setAttribute("disabled", "");
     document.querySelector("#canvas-frame-rate-input").removeAttribute("disabled");
   } else if (animationMode === "image") {
     document.querySelector("#canvas-frame-rate-input").setAttribute("disabled", "");
-    document.querySelector("#canvas-rendering-speed-input").removeAttribute("disabled");
+    document.querySelector("#canvas-rendering-time-input").removeAttribute("disabled");
   }
 }
 
