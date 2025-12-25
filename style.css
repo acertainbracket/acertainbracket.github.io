@@ -38,7 +38,7 @@ html, body, .wrapper {
 }
 
 .settings-wrapper main {
-    overflow-x: scroll
+    overflow-x: scroll;
 }
 
 .general-column {
