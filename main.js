@@ -52,8 +52,8 @@ const fixPad = (s, n) => {
   return lines.map(l => l.substring(padLength(lines[0]))).join("\n")
 }
 
-let canvasWidth = 300;
-let canvasHeight = 300;
+let canvasWidth = 750;
+let canvasHeight = 750;
 let canvasFrameRate = 60;
 
 const reverseMapping = mapping => Object.fromEntries(
@@ -171,8 +171,7 @@ let animate;
 
 let sketch = p5 => {
   p5.setup = () => {
-    p5.createCanvas(canvasWidth, canvasHeight, p5.WEBGL);
-    p5.pixelDensity(1);
+    p5.createCanvas(canvasWidth / p5.pixelDensity(), canvasHeight / p5.pixelDensity(), p5.WEBGL);
     p5.noStroke();
     p5.frameRate(canvasFrameRate);
     p5.background("white");
@@ -188,7 +187,7 @@ let sketch = p5 => {
 
     animate = () => {
       try {
-        p5.resizeCanvas(canvasWidth, canvasHeight);
+        p5.resizeCanvas(canvasWidth / p5.pixelDensity(), canvasHeight / p5.pixelDensity());
         [vertSrc, fragSrc] = generateGLSL();
         s = p5.createShader(vertSrc, fragSrc);
         p5.shader(s);
@@ -342,6 +341,7 @@ const operationDict = {
   "Less": node => `(${mj2gl(node[1])} < ${mj2gl(node[2])})`,
   "LessEqual": node => `(${mj2gl(node[1])} <= ${mj2gl(node[2])})`,
   "Equal": node => `(${mj2gl(node[1])} == ${mj2gl(node[2])})`,
+  "NotEqual": node => `(${mj2gl(node[1])} != ${mj2gl(node[2])})`,
   "Matrix": node =>
   `vec${node[1].length - 1}(${node[1].slice(1).map(entry => mj2gl(entry[1]))})`,
   "Subscript": node => `${mj2gl(node[1])}_${mj2gl(node[2])}`,
