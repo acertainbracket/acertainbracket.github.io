@@ -203,3 +203,6 @@ math-field::part(virtual-keyboard-toggle) {
     max-width: 90vw;
 }
 
+:is(.time-container, label):has([disabled]) {
+    display: none;
+}
