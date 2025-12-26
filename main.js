@@ -67,20 +67,62 @@ const topLevelMap = {
 }
 
 const configSelectorsMap = {
-  "#min-value": "a",
-  "#max-value": "b",
-  "#min-x": "c",
-  "#max-x": "d",
-  "#min-y": "e",
-  "#max-y": "f",
-  "#unit-t": "g",
-  "#equation": "h",
-  "#colour-mode": "i",
-  "#canvas-width-input": "j",
-  "#canvas-height-input": "k",
-  "#canvas-frame-rate-input": "l",
-  "#animation-mode": "m",
-  "#canvas-rendering-time-input": "n",
+  "#min-value": {
+    shortName: "a",
+    initial: 0,
+  },
+  "#max-value": {
+    shortName: "b",
+    initial: 1,
+  },
+  "#min-x": {
+    shortName: "c",
+    initial: 0,
+  },
+  "#max-x": {
+    shortName: "d",
+    initial: 1,
+  },
+  "#min-y": {
+    shortName: "e",
+    initial: 0,
+  },
+  "#max-y": {
+    shortName: "f",
+    initial: 1,
+  },
+  "#unit-t": {
+    shortName: "g",
+    initial: 1,
+  },
+  "#equation": {
+    shortName: "h",
+    initial: "xy",
+  },
+  "#colour-mode": {
+    shortName: "i",
+    initial: "greyscale",
+  },
+  "#canvas-width-input": {
+    shortName: "j",
+    initial: "300",
+  },
+  "#canvas-height-input": {
+    shortName: "k",
+    initial: "300",
+  },
+  "#canvas-frame-rate-input": {
+    shortName: "l",
+    initial: "20",
+  },
+  "#animation-mode": {
+    shortName: "m",
+    initial: "video",
+  },
+  "#canvas-rendering-time-input": {
+    shortName: "n",
+    initial: "5",
+  },
 };
 const configSelectors = Object.keys(configSelectorsMap);
 
@@ -277,7 +319,7 @@ const operationDict = {
   "Power": node => Number.isInteger(node[2]) && node[2] < 5 ?
   mj2gl(["Multiply",...(new Array(node[2])).fill(node[1])]) :
   `pow(${mj2gl(node[1])}, ${mj2gl(node[2])})`,
-  "Complex": node => `complex(${mj2gl(node[1])}, ${mj2gl(node[2])}, false)`,
+  "Complex": node => `complex(${mj2gl(node[1])}, ${mj2gl(node[2])})`,
   "Re": node => `real_part(${mj2gl(node[1])})`,
   "Add": node => node.length === 3 ?
   `add(${mj2gl(node[1])}, ${mj2gl(node[2])})` :
@@ -901,7 +943,7 @@ function convertToJSON() {
     .filter(selector => !document.querySelector(selector).hasAttribute("disabled"))
     .map(
       selector => [
-        configSelectorsMap[selector],
+        configSelectorsMap[selector].shortName,
         document.querySelector(selector).value
       ]
     );
@@ -982,7 +1024,8 @@ function loadEquationsFromObject(data) {
   clearDefinitionAndConstantElements();
   for (let id of configSelectors) {
     document.querySelector(id).value =
-      data?.[topLevelMap["settings"]]?.[configSelectorsMap[id]];
+      data?.[topLevelMap["settings"]]?.[configSelectorsMap[id].shortName]
+        ?? configSelectorsMap[id].initial;
   }
   if (Array.isArray(data?.[topLevelMap["functions"]])) {
     for (let functionData of data?.[topLevelMap["functions"]]) {
@@ -1094,9 +1137,11 @@ function updateModes() {
   if (animationMode === "video") {
     document.querySelector("#canvas-rendering-time-input").setAttribute("disabled", "");
     document.querySelector("#canvas-frame-rate-input").removeAttribute("disabled");
+    document.querySelector("#unit-t").removeAttribute("disabled");
   } else if (animationMode === "image") {
     document.querySelector("#canvas-frame-rate-input").setAttribute("disabled", "");
     document.querySelector("#canvas-rendering-time-input").removeAttribute("disabled");
+    document.querySelector("#unit-t").setAttribute("disabled", "");
   }
 }
 
