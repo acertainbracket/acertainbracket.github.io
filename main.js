@@ -171,7 +171,9 @@ let animate;
 
 let sketch = p5 => {
   p5.setup = () => {
-    p5.createCanvas(canvasWidth / p5.pixelDensity(), canvasHeight / p5.pixelDensity(), p5.WEBGL);
+    const canvas = p5.createCanvas(canvasWidth / p5.pixelDensity(), canvasHeight / p5.pixelDensity(), p5.WEBGL);
+    canvas.elt.style.width = `${canvasWidth / window.devicePixelRatio}px`;
+    canvas.elt.style.height = `${canvasHeight / window.devicePixelRatio}px`;
     p5.noStroke();
     p5.frameRate(canvasFrameRate);
     p5.background("white");
@@ -188,6 +190,8 @@ let sketch = p5 => {
     animate = () => {
       try {
         p5.resizeCanvas(canvasWidth / p5.pixelDensity(), canvasHeight / p5.pixelDensity());
+        canvas.elt.style.width = `${canvasWidth / window.devicePixelRatio}px`;
+        canvas.elt.style.height = `${canvasHeight / window.devicePixelRatio}px`;
         [vertSrc, fragSrc] = generateGLSL();
         s = p5.createShader(vertSrc, fragSrc);
         p5.shader(s);
