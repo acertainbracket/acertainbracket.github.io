@@ -1,27 +1,104 @@
 const nodeMode = ["localhost", "127.0.0.1"].includes(window.location.hostname) && !window.navigator.onLine;
 let ComputeEngine;
 let MathfieldElement;
+let mathVirtualKeyboard;
 if (nodeMode) {
   Promise.all([
     import("./node_modules/@cortex-js/compute-engine/dist/compute-engine.esm.js"),
     import("./node_modules/p5/lib/p5.esm.js"),
     import("./node_modules/mathlive/mathlive.min.mjs"),
-  ]).then(([{ComputeEngine: ce}, {default: p}, {MathfieldElement: me}]) => {
-    onModuleLoad(ce, p, me);
+  ]).then(([
+    {ComputeEngine: ce},
+    {default: p},
+    {MathfieldElement: me, initVirtualKeyboardInCurrentBrowsingContext: initKeyboard}
+  ]) => {
+    const mvk = initKeyboard();
+    onModuleLoad(ce, p, me, mvk);
   })
 } else {
   Promise.all([
     import("https://unpkg.com/@cortex-js/compute-engine@0.30.2?module"),
     import("https://cdn.jsdelivr.net/npm/p5@2.0.4/lib/p5.esm.js"),
     import("https://unpkg.com/mathlive@0.107.0?module"),
-  ]).then(([{ComputeEngine: ce}, {default: p}, {MathfieldElement: me}]) => {
-    onModuleLoad(ce, p, me);
+  ]).then(([
+    {ComputeEngine: ce},
+    {default: p},
+    {MathfieldElement: me, initVirtualKeyboardInCurrentBrowsingContext: initKeyboard}
+  ]) => {
+    const mvk = initKeyboard();
+    onModuleLoad(ce, p, me, mvk);
   })
 }
+const fix = s => ({insert: s, label: s,  shift: s.toUpperCase()})
+const operations = [
+  [
+    {latex: "=", shift: "\\neq"}, 
+    {latex: "<", shift: "\\leq"},
+    {latex: ">", shift: "\\geq"},
+    {latex: "\\sin", shift: "\\sin^{-1}"},
+    {latex: "\\cos", shift: "\\cos^{-1}"},
+    {latex: "\\tan", shift: "\\tan^{-1}"},
+    {latex: "\\max", shift: "\\min"},
+    {latex: "\\log"},
+    {
+      insert: "\\begin{bmatrix}#?\\\\#?\\end{bmatrix}",
+      latex: "\\scriptscriptstyle{\\begin{bmatrix}x \\\\ y\\end{bmatrix}}"
+    },
+    {
+      insert: "\\begin{bmatrix}#?\\\\#?\\\\#?\\end{bmatrix}",
+      class: "hide-shift small",
+      latex: "\\scriptscriptstyle{\\begin{bmatrix}x \\\\ y \\\\ z \\end{bmatrix}}",
+      shift: {
+        insert: "\\begin{bmatrix}#?\\\\#?\\\\#?\\\\#?\\end{bmatrix}",
+        class: "small",
+        latex: "\\scriptscriptstyle{\\begin{bmatrix}x\\\\y\\\\z\\\\w\\end{bmatrix}}",
+      }
+    },
+  ],
+  [
+    {latex: "+"},
+    {latex: "-"},
+    { latex: "\\cdot"},
+    {
+      latex: "\\scriptscriptstyle{\\frac{#?}{#?}}",
+      insert: "\\frac{#?}{#?}"
+    },
+    {latex: "#@^{#?}", shift: "#@^{\\circ #?}"},
+    {latex: "\\sqrt{#?}"}, 
+    {latex: "\\left(#0 \\right)"},
+    {latex: "\\llbracket#0\\rrbracket"},
+    {latex: "|#?|", shift: "\\Vert#?\\Vert"},
+    {latex: "\\left\\lfloor#0\\right\\rfloor", shift: "\\left\\lceil#0\\right\\rceil"},
+  ],
+].map(row => row.map(key => ({class: "hide-shift", ...key})));
+const commands = ["[shift]", "[left]", "[right]", "[backspace]", "[undo]", "[redo]"];
+const romanLayout = withOperations => ({
+  label: "abc",
+  rows: [
+    ...(withOperations ? operations : []),
+    "1234567890".split(""),
+    "qwertyuiop".split("").map(fix),
+    "asdfghjkl".split("").map(fix).concat(["#@_{#?}"]),
+    "zxcvbnm".split("").map(fix).concat([",", "."]),
+    commands,
+  ]
+});
+const greekLayout = withOperations => ({
+  label: "αβγ",
+  rows: [
+    ...(withOperations ? operations : []),
+    "1234567890".split(""),
+    "αβγδεζηθικ".split("").map(fix),
+    "λμνξοπρστ".split("").map(fix).concat(["#@_{#?}"]),
+    "υφχψω".split("").map(fix).concat([",", ".",]),
+    commands,
+  ]
+});
 
-async function onModuleLoad(ce, p, me) {
+async function onModuleLoad(ce, p, me, mvk) {
   ComputeEngine = ce;
   MathfieldElement = me;
+  mathVirtualKeyboard = mvk
 
   const url  = new URL(window.location.href);
   const example = url.searchParams.get("example");
@@ -32,6 +109,16 @@ async function onModuleLoad(ce, p, me) {
   if (data) {
     loadEquationsFromObject(JSON.parse(base64Decode(data)));
   }
+
+  document.querySelectorAll(".settings math-field:not([readonly])").forEach(element => {
+    element.onfocus = () => {
+      mathVirtualKeyboard.layouts = [romanLayout(true), greekLayout(true)];
+    }
+  });
+
+  document.querySelector("#equation").onfocus = () => {
+    mathVirtualKeyboard.layouts = [romanLayout(true), greekLayout(true)];
+  };
 
   new p(sketch);
 }
@@ -287,7 +374,7 @@ const parseErrors = (fragSrc, errorString) => {
     symbolIndex++;
   }
 
-  Array.from(document.querySelectorAll(".error")).forEach(element => element.classList.remove("error"));
+  document.querySelectorAll(".error").forEach(element => element.classList.remove("error"));
 
   const errorLines = lines
     .map((line, index) => [line, index + 1])
@@ -313,8 +400,13 @@ const parseErrors = (fragSrc, errorString) => {
 }
 
 const operationDict = {
+  "Log": node => `log(${mj2gl(node[1])})`,
   "Cos": node => `cos(${mj2gl(node[1])})`,
+  "Arccos": node => `acos(${mj2gl(node[1])})`,
   "Sin": node => `sin(${mj2gl(node[1])})`,
+  "Arcsin": node => `asin(${mj2gl(node[1])})`,
+  "Tan": node => `tan(${mj2gl(node[1])})`,
+  "Arctan": node => `atan(${mj2gl(node[1])})`,
   "Sqrt": node => `sqrt(${mj2gl(node[1])})`,
   "Floor": node => `floor(${mj2gl(node[1])})`,
   "Ceil": node => `ceil(${mj2gl(node[1])})`,
@@ -866,6 +958,8 @@ const createNewFunctionDefinitionElement = () => {
     clone.querySelector(".user-function-input-signature");
   const outputSignatureMathfield =
     clone.querySelector(".user-function-output-signature");
+  const userFunctionSymbolMathfield = clone.querySelector(".user-function-symbol");
+  const userFunctionInputsMathfield = clone.querySelector(".user-function-inputs");
   const userEquationMathfield = clone.querySelector(".user-function-equation");
   clone.querySelector(".user-function-symbol")
     .oninput = (e) => readOnlyUserFunctionSymbol.innerText = e.target.value;
@@ -873,9 +967,21 @@ const createNewFunctionDefinitionElement = () => {
     e.target.closest(".user-function-definition").remove();
   }
   const setupElement = () => {
+    userFunctionSymbolMathfield.onfocus = () => {
+      mathVirtualKeyboard.layouts = [romanLayout(false), greekLayout(false)];
+    };
+    userFunctionInputsMathfield.onfocus = () => {
+      mathVirtualKeyboard.layouts = [romanLayout(false), greekLayout(false)];
+    };
     userEquationMathfield.inlineShortcuts = {
       ...userEquationMathfield.inlineShortcuts,
       ...equationInlineShortcuts,
+    };
+    userEquationMathfield.onfocus = () => {
+      mathVirtualKeyboard.layouts = [
+        romanLayout(true),
+        greekLayout(true),
+      ]
     };
     const signatureInlineShortcuts = {
       "*": "\\times",
@@ -888,10 +994,26 @@ const createNewFunctionDefinitionElement = () => {
       ...inputSignatureMathfield.inlineShortcuts,
       ...signatureInlineShortcuts,
     };
+    inputSignatureMathfield.onfocus = () => {
+      mathVirtualKeyboard.layouts = {
+        rows: [
+          [ "\\R", "\\R^2", "\\R^3", "\\R^4", "\\C", "\\times", ],
+          commands,
+        ]
+      };
+    }
     outputSignatureMathfield.inlineShortcuts = {
       ...outputSignatureMathfield.inlineShortcuts,
       ...signatureInlineShortcuts,
     };
+    outputSignatureMathfield.onfocus = () => {
+      mathVirtualKeyboard.layouts = {
+        rows: [
+          [ "\\R", "\\R^2", "\\R^3", "\\R^4", "\\C", "\\times", ],
+          commands,
+        ]
+      };
+    }
   }
   clone.querySelector(".left-button").onclick = (e) => {
     e.target.closest(".user-function-definition")
@@ -919,6 +1041,8 @@ const createNewConstantDefinitionElement = () => {
   const clone = document.querySelector("#user-constant-template")
     .content.cloneNode(true);
   const parentElement = document.querySelector("#user-constant-list");
+  const userConstantSymbolMathfield = clone.querySelector(".user-constant-symbol");
+  const userConstantValueMathfield = clone.querySelector(".user-constant-value");
   clone.querySelector(".remove-button").onclick = (e) => {
     e.target.closest(".user-constant-definition").remove();
   }
@@ -933,6 +1057,12 @@ const createNewConstantDefinitionElement = () => {
       ?.after(e.target.closest(".user-constant-definition"));
   }
   parentElement.appendChild(clone);
+  userConstantSymbolMathfield.onfocus = () => {
+    mathVirtualKeyboard.layouts = [romanLayout(false), greekLayout(false)];
+  };
+  userConstantValueMathfield.onfocus = () => {
+    mathVirtualKeyboard.layouts = [romanLayout(true), greekLayout(true)];
+  };
   document.querySelectorAll("math-field[readonly]")
     .forEach(mf => mf.tabIndex = -1);
   return parentElement.lastElementChild;
