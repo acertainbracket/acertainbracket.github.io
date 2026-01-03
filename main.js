@@ -1135,6 +1135,7 @@ async function loadExample(example) {
     "ray-tracing-2": "ray-tracing-2.json",
     "ray-tracing-3": "ray-tracing-3.json",
     "ray-marching-1": "ray-marching-1.json",
+    "ray-marching-2": "ray-marching-2.json",
   }
 
   const exampleFile = valueToExampleFile?.[example];
