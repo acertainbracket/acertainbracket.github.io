@@ -17,9 +17,9 @@ if (nodeMode) {
   })
 } else {
   Promise.all([
-    import("https://unpkg.com/@cortex-js/compute-engine@0.30.2?module"),
-    import("https://cdn.jsdelivr.net/npm/p5@2.0.4/lib/p5.esm.js"),
-    import("https://unpkg.com/mathlive@0.107.0?module"),
+    import("https://unpkg.com/@cortex-js/compute-engine@0.53.0?module"),
+    import("https://cdn.jsdelivr.net/npm/p5@2.2.1/lib/p5.esm.js"),
+    import("https://unpkg.com/mathlive@0.108.3?module"),
   ]).then(([
     {ComputeEngine: ce},
     {default: p},
@@ -94,6 +94,7 @@ const greekLayout = withOperations => ({
     commands,
   ]
 });
+let glslLoopID = 0;
 
 async function onModuleLoad(ce, p, me, mvk) {
   ComputeEngine = ce;
@@ -285,21 +286,21 @@ let sketch = p5 => {
         canvasAnimationMode =
           document.querySelector("#animation-mode").value;
         s.setUniform("min_value",
-          document.querySelector("#min-value").expression.compile()());
+          document.querySelector("#min-value").expression.evaluate());
         s.setUniform("max_value",
-          document.querySelector("#max-value").expression.compile()());
+          document.querySelector("#max-value").expression.evaluate());
         s.setUniform("width", canvasWidth);
         s.setUniform("height", canvasHeight);
         s.setUniform("min_x",
-          document.querySelector("#min-x").expression.compile()());
+          document.querySelector("#min-x").expression.evaluate());
         s.setUniform("max_x",
-          document.querySelector("#max-x").expression.compile()());
+          document.querySelector("#max-x").expression.evaluate());
         s.setUniform("min_y",
-          document.querySelector("#min-y").expression.compile()());
+          document.querySelector("#min-y").expression.evaluate());
         s.setUniform("max_y",
-          document.querySelector("#max-y").expression.compile()());
+          document.querySelector("#max-y").expression.evaluate());
         s.setUniform("unit_t",
-          document.querySelector("#unit-t").expression.compile()());
+          document.querySelector("#unit-t").expression.evaluate());
         if (canvasAnimationMode === "video") {
           p5.frameRate(canvasFrameRate);
           t0 = p5.millis();
@@ -400,49 +401,82 @@ const parseErrors = (fragSrc, errorString) => {
 }
 
 const operationDict = {
-  "Log": node => `log(${mj2gl(node[1])})`,
-  "Cos": node => `cos(${mj2gl(node[1])})`,
-  "Arccos": node => `acos(${mj2gl(node[1])})`,
-  "Sin": node => `sin(${mj2gl(node[1])})`,
-  "Arcsin": node => `asin(${mj2gl(node[1])})`,
-  "Tan": node => `tan(${mj2gl(node[1])})`,
-  "Arctan": node => `atan(${mj2gl(node[1])})`,
-  "Sqrt": node => `sqrt(${mj2gl(node[1])})`,
-  "Floor": node => `floor(${mj2gl(node[1])})`,
-  "Ceil": node => `ceil(${mj2gl(node[1])})`,
-  "Abs": node => `abs(${mj2gl(node[1])})`,
-  "Power": node => Number.isInteger(node[2]) && node[2] < 5 ?
-  mj2gl(["Multiply",...(new Array(node[2])).fill(node[1])]) :
-  `pow(${mj2gl(node[1])}, ${mj2gl(node[2])})`,
-  "Complex": node => `complex(${mj2gl(node[1])}, ${mj2gl(node[2])})`,
-  "Re": node => `real_part(${mj2gl(node[1])})`,
-  "Add": node => node.length === 3 ?
-  `add(${mj2gl(node[1])}, ${mj2gl(node[2])})` :
-  `add(${mj2gl(node[1])}, ${mj2gl(["Add", ...node.slice(2)])})`,
-  "Negate": node => `negate(${mj2gl(node[1])})`,
-  "Multiply": node => node.length === 3 ?
-  `multiply(${mj2gl(node[1])}, ${mj2gl(node[2])})` :
-  `multiply(${mj2gl(node[1])}, ${mj2gl(["Multiply", ...node.slice(2)])})`,
-  "Norm": node => `length(${mj2gl(node[1])})`,
-  "Divide": node => `divide(${mj2gl(node[1])}, ${mj2gl(node[2])})`,
-  "Rational": node => `(${mj2gl(node[1])} / ${mj2gl(node[2])})`,
-  "Mod": node => `mod(${mj2gl(node[1])}, ${mj2gl(node[2])})`,
-  "Min": node => node.length === 3 ?
-  `min(${mj2gl(node[1])}, ${mj2gl(node[2])})` :
-  `min(${mj2gl(node[1])}, ${mj2gl(["Min", ...node.slice(2)])})`,
-  "Max": node => node.length === 3 ?
-  `max(${mj2gl(node[1])}, ${mj2gl(node[2])})` :
-  `max(${mj2gl(node[1])}, ${mj2gl(["Max", ...node.slice(2)])})`,
-  "Boole": node => `float(${mj2gl(node[1])})`,
-  "Less": node => `(${mj2gl(node[1])} < ${mj2gl(node[2])})`,
-  "LessEqual": node => `(${mj2gl(node[1])} <= ${mj2gl(node[2])})`,
-  "Equal": node => `(${mj2gl(node[1])} == ${mj2gl(node[2])})`,
-  "NotEqual": node => `(${mj2gl(node[1])} != ${mj2gl(node[2])})`,
-  "Matrix": node =>
-  `vec${node[1].length - 1}(${node[1].slice(1).map(entry => mj2gl(entry[1]))})`,
-  "Subscript": node => `${mj2gl(node[1])}_${mj2gl(node[2])}`,
-  "Apply": node => `${mj2gl(node[1])}(${node.slice(2).map(mj2gl).join(",")})`,
-  "Tuple": node => {
+  "Log": (node, prefixStrings) => `log(${mj2gl(node[1], prefixStrings)})`,
+  "Cos": (node, prefixStrings) => `cos(${mj2gl(node[1], prefixStrings)})`,
+  "Arccos": (node, prefixStrings) => `acos(${mj2gl(node[1], prefixStrings)})`,
+  "Sin": (node, prefixStrings) => `sin(${mj2gl(node[1], prefixStrings)})`,
+  "Arcsin": (node, prefixStrings) => `asin(${mj2gl(node[1], prefixStrings)})`,
+  "Tan": (node, prefixStrings) => `tan(${mj2gl(node[1], prefixStrings)})`,
+  "Arctan": (node, prefixStrings) => `atan(${mj2gl(node[1], prefixStrings)})`,
+  "Sqrt": (node, prefixStrings) => `sqrt(${mj2gl(node[1], prefixStrings)})`,
+  "Floor": (node, prefixStrings) => `floor(${mj2gl(node[1], prefixStrings)})`,
+  "Ceil": (node, prefixStrings) => `ceil(${mj2gl(node[1], prefixStrings)})`,
+  "Abs": (node, prefixStrings) => `abs(${mj2gl(node[1], prefixStrings)})`,
+  "Power": (node, prefixStrings) => Number.isInteger(node[2]) && node[2] < 5 ?
+    mj2gl(["Multiply",...(new Array(node[2])).fill(node[1])]) :
+    `pow(${mj2gl(node[1], prefixStrings)}, ${mj2gl(node[2], prefixStrings)})`,
+  "Complex": (node, prefixStrings) => `complex(${mj2gl(node[1], prefixStrings)}, ${mj2gl(node[2], prefixStrings)})`,
+  "Re": (node, prefixStrings) => `real_part(${mj2gl(node[1], prefixStrings)})`,
+  "Add": (node, prefixStrings) => {
+    if (prefixStrings === null) {
+      return node.length === 3 ?
+        `${mj2gl(node[1], prefixStrings)} + ${mj2gl(node[2], prefixStrings)}` :
+        `${mj2gl(node[1], prefixStrings)} + (${mj2gl(["Add", ...node.slice(2)], prefixStrings)})`;
+    }
+    return node.length === 3 ?
+      `add(${mj2gl(node[1], prefixStrings)}, ${mj2gl(node[2], prefixStrings)})` :
+      `add(${mj2gl(node[1], prefixStrings)}, ${mj2gl(["Add", ...node.slice(2)], prefixStrings)})`;
+  },
+  "Subtract": (node, prefixStrings) => mj2gl(["Add", node[1], ["Negate", node[2]]], prefixStrings),
+  "Negate": (node, prefixStrings) => prefixStrings === null ? `-1.0 * (${mj2gl(node[1], prefixStrings)})` : `negate(${mj2gl(node[1], prefixStrings)})`,
+  "Multiply": (node, prefixStrings) => {
+    if (prefixStrings === null) {
+      return node.length === 3 ?
+        `${mj2gl(node[1], prefixStrings)} * ${mj2gl(node[2], prefixStrings)}` :
+        `${mj2gl(node[1], prefixStrings)} * (${mj2gl(["Multiply", ...node.slice(2)], prefixStrings)})`;
+    }
+    return node.length === 3 ?
+      `multiply(${mj2gl(node[1], prefixStrings)}, ${mj2gl(node[2], prefixStrings)})` :
+      `multiply(${mj2gl(node[1], prefixStrings)}, ${mj2gl(["Multiply", ...node.slice(2)], prefixStrings)})`;
+  },
+  "Norm": (node, prefixStrings) => `length(${mj2gl(node[1], prefixStrings)})`,
+  "Divide": (node, prefixStrings) => `divide(${mj2gl(node[1], prefixStrings)}, ${mj2gl(node[2], prefixStrings)})`,
+  "Rational": (node, prefixStrings) => `(${mj2gl(node[1], prefixStrings)} / ${mj2gl(node[2], prefixStrings)})`,
+  "Mod": (node, prefixStrings) => `mod(${mj2gl(node[1], prefixStrings)}, ${mj2gl(node[2], prefixStrings)})`,
+  "Min": (node, prefixStrings) => node.length === 3 ?
+  `min(${mj2gl(node[1], prefixStrings)}, ${mj2gl(node[2], prefixStrings)})` :
+  `min(${mj2gl(node[1], prefixStrings)}, ${mj2gl(["Min", ...node.slice(2)], prefixStrings)})`,
+  "Max": (node, prefixStrings) => node.length === 3 ?
+  `max(${mj2gl(node[1], prefixStrings)}, ${mj2gl(node[2], prefixStrings)})` :
+  `max(${mj2gl(node[1], prefixStrings)}, ${mj2gl(["Max", ...node.slice(2)], prefixStrings)})`,
+  "CustomBoolean": (node, prefixStrings) => `float(${mj2gl(node[1], prefixStrings)})`,
+  "Boole": (node, prefixStrings) => `float(${mj2gl(node[1], prefixStrings)})`,
+  "Less": (node, prefixStrings) => `(${mj2gl(node[1], prefixStrings)} < ${mj2gl(node[2], prefixStrings)})`,
+  "Greater": (node, prefixStrings) => `(${mj2gl(node[1], prefixStrings)} > ${mj2gl(node[2], prefixStrings)})`,
+  "LessEqual": (node, prefixStrings) => `(${mj2gl(node[1], prefixStrings)} <= ${mj2gl(node[2], prefixStrings)})`,
+  "GreaterEqual": (node, prefixStrings) => `(${mj2gl(node[1], prefixStrings)} >= ${mj2gl(node[2], prefixStrings)})`,
+  "Equal": (node, prefixStrings) => `(${mj2gl(node[1], prefixStrings)} == ${mj2gl(node[2], prefixStrings)})`,
+  "NotEqual": (node, prefixStrings) => `(${mj2gl(node[1], prefixStrings)} != ${mj2gl(node[2], prefixStrings)})`,
+  "Matrix": (node, prefixStrings) =>
+  `vec${node[1].length - 1}(${node[1].slice(1).map(entry => mj2gl(entry[1], prefixStrings))})`,
+  "Subscript": (node, prefixStrings) => `${mj2gl(node[1], prefixStrings)}_${mj2gl(node[2], prefixStrings)}`,
+  "Apply": (node, prefixStrings) => `${mj2gl(node[1], prefixStrings)}(${node.slice(2).map(otherNode => mj2gl(otherNode, prefixStrings)).join(",")})`,
+  "Predicate": (node, prefixStrings) => mj2gl([node[1], ...node.slice(2)], prefixStrings),
+  "InvisibleOperator": (node, prefixStrings) => {
+    if (node.length > 3) {
+      return mj2gl(["InvisibleOperator", node[1], ["InvisibleOperator", ...node.slice(2)]], prefixStrings);
+    } if (node?.[1]?.[0] === "Power" && node?.[1]?.[2]?.[0] === "InvisibleOperator" && node?.[1]?.[2]?.[1] === "Circ") {
+      return mj2gl(["Tuple", ["Power", node?.[1]?.[1], ['', '', node?.[1]?.[2]?.[2]]], ["Tuple", ...node?.[2]?.[1].slice(1)]], prefixStrings);
+    } if (node?.[2]?.[0] === "Delimiter" && node?.[2]?.[1]?.[0] === "Sequence") {
+      return mj2gl([node?.[1], ...node?.[2]?.[1].slice(1)], prefixStrings);
+    } if (node?.[2]?.[0] === "Delimiter" && !Array.isArray(node?.[1]) && Object.hasOwn(symbolsMap, node?.[1])) {
+      return mj2gl([node?.[1], node?.[2]?.[1]], prefixStrings);
+    }
+    return mj2gl(["Multiply", ...node.slice(1)], prefixStrings)
+  },
+  "Delimiter": (node, prefixStrings) => mj2gl(node[1], prefixStrings),
+  "Sequence": (node, prefixStrings) => mj2gl(["Tuple", ...node.slice(1)], prefixStrings),
+  "Tuple": (node, prefixStrings) => {
     if (node?.[1]?.[0] === "Power") {
       const functionSymbol = node[1][1]?.[0] === "Subscript" ?
         `${node[1][1][1]}_${node[1][1][2]}`: node[1][1];
@@ -458,22 +492,52 @@ const operationDict = {
         let inputs = node[2].slice(1).map(
           (child, index) =>
           symbolsMap[functionSymbol].inputSignature[index] === "complex" ?
-          `injection_map(${mj2gl(child)})` :
-          mj2gl(child))
+          `injection_map(${mj2gl(child, prefixStrings)})` :
+          mj2gl(child, prefixStrings))
         return `iterate_${functionSymbol}_${node[1][2][2]}(${inputs.join(",")})`;
       }
-      let input = symbolsMap[functionSymbol].inputSignature[0] === "complex" ?
-        `injection_map(${mj2gl(node[2])})` : mj2gl(node[2]);
+      let input = symbolsMap[functionSymbol]?.inputSignature[0] === "complex" ?
+        `injection_map(${mj2gl(node[2], prefixStrings)})` : mj2gl(node[2], prefixStrings);
       return `iterate_${functionSymbol}_${node[1][2][2]}(${input})`;
     }
-    return "to_tuple(" + node.slice(1).map(mj2gl).join(",") + ")";
-  }
+    return "to_tuple(" + node.slice(1).map(value => mj2gl(value, prefixStrings)).join(",") + ")";
+  },
+  "Sum": (node, prefixStrings) => {
+    const loopVariable = node?.[2]?.[1];
+    const newPrefixStrings = [];
+    const currentLoopID = glslLoopID;
+    glslLoopID++;
+    const innerGLSL = mj2gl(node?.[1], newPrefixStrings);
+    prefixStrings.push(fixPad(`
+      float loop_${currentLoopID} = 0.0;
+      for (float ${loopVariable} = ${mj2gl(node?.[2]?.[2], null)}; ${loopVariable} <= ${mj2gl(node?.[2]?.[3], null)}; ${loopVariable}++) {
+        ${newPrefixStrings.join("\n").split("\n").join(`
+        `)}
+        loop_${currentLoopID} += ${innerGLSL};
+      }`));
+    return `loop_${currentLoopID}`;
+  },
+  "Product": (node, prefixStrings) => {
+    const loopVariable = node?.[2]?.[1];
+    const newPrefixStrings = [];
+    const currentLoopID = glslLoopID;
+    glslLoopID++;
+    const innerGLSL = mj2gl(node?.[1], newPrefixStrings);
+    prefixStrings.push(fixPad(`
+      float loop_${currentLoopID} = 1.0;
+      for (float ${loopVariable} = ${mj2gl(node?.[2]?.[2], null)}; ${loopVariable} <= ${mj2gl(node?.[2]?.[3], null)}; ${loopVariable}++) {
+        ${newPrefixStrings.join("\n").split("\n").join(`
+        `)}
+        loop_${currentLoopID} *= ${innerGLSL};
+      }`));
+    return `loop_${currentLoopID}`;
+  },
 }
 
-function mj2gl(node) {
+function mj2gl(node, prefixStrings) {
   if (Array.isArray(node)) {
     if (node[0] in operationDict) {
-      return operationDict[node[0]](node);
+      return operationDict[node[0]](node, prefixStrings);
     } else {
       if (node[0] === "Error") {
         return node;
@@ -483,13 +547,14 @@ function mj2gl(node) {
         return node[0]+"(" + node.slice(1).map((child, index) =>
           symbolsMap[node[0]].inputSignature[index] === "complex" &&
           symbolsMap[node[0]].inputSignature.length === node.slice(1).length ?
-          `injection_map(${mj2gl(child)})` :
-          mj2gl(child)).join(",") + ")";
+          `injection_map(${mj2gl(child, prefixStrings)})` :
+          mj2gl(child, prefixStrings)).join(",") + ")";
       }
     }
   } else if (typeof node === "number"){
     const strRep = node.toString();
-    return `float_identity(${strRep.includes(".") ? strRep : strRep + ".0"})`;
+    const strFormat = strRep.includes(".") ? strRep : strRep + ".0";
+    return prefixStrings === null ? strFormat : `float_identity(${strFormat})`;
   } else if (["x","y","t","Pi","ExponentialE"].includes(node)){
     return node;
   } else {
@@ -619,7 +684,7 @@ function defineConstants(constantElements) {
     const symbolElement = constantElement.querySelector(".user-constant-symbol");
     const valueElement = constantElement.querySelector(".user-constant-value");
     const symbolString = JSON.parse(symbolElement.getValue("math-json"));
-    const valueString = mj2gl(JSON.parse(valueElement.getValue("math-json")));
+    const valueString = mj2gl(JSON.parse(valueElement.getValue("math-json")), null);
     return fixPad(`
       #define ${symbolString} ${valueString}`);
   });
@@ -649,12 +714,17 @@ function generateFunctions(
     inputSignature,
     outputSignature,
   }) => {
-    const math = mj2gl(JSON.parse(equationElement.getValue("math-json")))
+    const prefixStrings = []
+    const latex = equationElement.getValue();
+    const mathJSON = equationComputeEngine.parse(latex, {form: 'raw'}).json
+    const glsl = mj2gl(mathJSON, prefixStrings)
     return fixPad(`
         ${outputSignature.join("_")} ${functionSymbol}(${
           variables.map((variable, i) => `${inputSignature[i]} ${variable}`).join(", ")
         }) {
-          return ${math};
+          ${prefixStrings.join("\n").split("\n").join(`
+          `)}
+          return ${glsl};
         }`) + (inputSignature.length > 1 ? "\n" + fixPad(`
         ${outputSignature.join("_")} ${functionSymbol}(${inputSignature.join("_")} tuple) {
           return ${functionSymbol}(${inputSignature.map((_, i) => `tuple.arg${i}`).join(", ")});
@@ -663,14 +733,14 @@ function generateFunctions(
           inputSignature.map((type, i) => `${type} arg${i}`).join(", ")
         }) {
           ${outputSignature.join("_")} value = to_tuple(${inputSignature.map((type, i) => `arg${i}`).join(",")});
-          for (int i = 0; i < ${amount}; i++) {
+          for (int loopIndex = 0; loopIndex < ${amount}; loopIndex++) {
             value = ${symbol}(value);
           }
           return value;
         }`) : "") + "\n" + fixPad(`
         ${outputSignature.join("_")} iterate_${symbol}_${amount}(${inputSignature.join("_")} arg) {
           ${outputSignature.join("_")} value = arg;
-          for (int i = 0; i < ${amount}; i++) {
+          for (int loopIndex = 0; loopIndex < ${amount}; loopIndex++) {
             value = ${symbol}(value);
           }
           return value;
@@ -696,34 +766,65 @@ function generateGLSL() {
 
   const equationComputeEngine = new ComputeEngine();
 
-  let declared = new Set();
-  for (let {functionSymbol, variables} of functionDeclarations) {
-    const symbolString = functionSymbol.charAt(0);
-
-    if (!declared.has(symbolString)) {
-      equationComputeEngine.declare(symbolString, `(x:any)->number`);
-      declared.add(symbolString);
-    }
-  }
-  equationComputeEngine.declare("Re", `(x:any)->number`);
-
   const iSymbol = {
     name: "CustomImaginaryUnit",
     latexTrigger: "i",
     kind: "symbol",
   };
 
-  equationComputeEngine.latexDictionary =
-    equationComputeEngine.latexDictionary.filter(a => a.parse !== "ImaginaryUnit");
-  equationComputeEngine.latexDictionary =
-    equationComputeEngine.latexDictionary.concat([iSymbol]);
+  const boolMatchfix = {
+    name: "CustomBoole",
+    openTrigger: "\\llbracket",
+    closeTrigger: "\\rrbracket",
+    kind: "matchfix",
+    parse: (e, n) => ["CustomBoolean", n]
+  };
 
+  const customBoolean = {
+    name: "CustomBoolean",
+    kind: "function",
+  };
+
+  const customCirc = {
+    name: "Circ",
+    latexTrigger: "\\circ",
+    kind: "function",
+  }
+
+  equationComputeEngine.declare("CustomBoolean", `(x: number)-> number`);
+  equationComputeEngine.declare("Predicate", `(x: number)-> number`);
   equationComputeEngine.declare("CustomImaginaryUnit", "number");
+  equationComputeEngine.declare("Re", `(x:number)->number`);
+  equationComputeEngine.declare("Circ", `(x:number)->number`);
+
+  let symbols = [iSymbol, boolMatchfix, customBoolean, customCirc];
+  let declared = new Set();
+  for (let {functionSymbol, variables} of functionDeclarations) {
+    const symbolString = functionSymbol.charAt(0);
+
+    if (!declared.has(symbolString)) {
+      equationComputeEngine.declare(symbolString, `(x:number)->number`);
+      declared.add(symbolString);
+    }
+  }
+
+  const filterPredicates = [
+    x => !["D", "Derivative", "EulerDerivative"].includes(x.name),
+    x => x.parse !== "ImaginaryUnit",
+    x => !["\\llbracket", "["].includes(x.openTrigger),
+  ];
+
+  equationComputeEngine.latexDictionary = equationComputeEngine.latexDictionary
+    .filter(a => filterPredicates.every(predicate => predicate(a)))
+    .concat(symbols);
 
   MathfieldElement.computeEngine = equationComputeEngine;
 
-  const mathJSON = JSON.parse(brightnessEquationElement.getValue("math-json"));
-  const brightnessExpression = mj2gl(mathJSON);
+  const latex = brightnessEquationElement.getValue();
+  const mathJSON = equationComputeEngine.parse(latex, {form: 'raw'}).json;
+  console.log(mathJSON);
+  const prefixStrings = [];
+  const brightnessExpression = mj2gl(mathJSON, prefixStrings);
 
   const {
     structDeclarationStrings,
@@ -751,9 +852,18 @@ function generateGLSL() {
     }`);
 
   let fragSrc = fixPad(`
+    #ifdef GL_FRAGMENT_PRECISION_HIGH
+    precision highp float;
+    #else
+    precision mediump float;
+    #endif
+    precision mediump int;
+
     #define Pi 3.1415926538
     #define ExponentialE 2.7182818284
+    #define e 2.7182818284
     #define CustomImaginaryUnit complex(0.0, 1.0)
+    #define i complex(0.0, 1.0)
 
     ${
       constantDefinitionStrings.join(`
@@ -918,6 +1028,8 @@ function generateGLSL() {
     `)}
 
     ${mainOutputGLSLSignature} brightness(${mainInputGLSLSignature}) {
+      ${prefixStrings.join("\n").split("\n").join(`
+      `)}
       return ${brightnessExpression};
     }
 
@@ -1316,7 +1428,7 @@ document.querySelector("#load-button").onclick = () => {
     reader.readAsText(file, "UTF-8");
     reader.onload = readerEvent => {
       loadEquationsFromObject(JSON.parse(readerEvent.target.result));
-      animate();
+      //animate();
     }
   }
   input.click();

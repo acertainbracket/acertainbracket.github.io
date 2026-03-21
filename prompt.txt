@@ -1,0 +1,96 @@
+<insert main prompt here, i.e. "Please create a loading animation with 16 circles moving in a circle">
+
+Ensure the equations are formatted in JSON such that it is of the following TypeScript type:
+
+Note: the domain, codomain and input variables of the main function is implicitly changed by the settings
+The domain is:
+- "\\mathbb{R} \\times \\mathbb{R}" if `mode` is "Image".
+- "\\mathbb{R} \\times \\mathbb{R} \\times \\mathbb{R}" if `mode` is "video".
+The variables are:
+- "x, y" if `mode` is "Image".
+- "x, y, t" if `mode` is "video".
+The codomain is:
+- "\\mathbb{R}" if `colour` is "Greyscale".
+- "\\mathbb{R} \\times \\mathbb{R} \\times \\mathbb{R}" if `colour` is "RBG".
+
+```
+{
+    "settings": {
+        "colour": "Greyscale" | "RGB",
+        "mode": [
+                    "Image",
+                    {
+                        "Rendering Time(s)": number
+                    }
+                ] | [
+                    "Video",
+                    {
+                        "Frame Rate": number,
+                        "One second is equal to _ units of $t$": number
+                    }
+                ],
+        "width": number,
+        "height": number,
+    }
+    "Main Function Definition": string,
+    "Function Declarations": {
+        
+    }
+}
+    
+
+
+
+% Main Function
+\mathrm{Brightness} : \mathbb{R} \times \mathbb{R} \to \mathbb{R}
+\mathrm{Brightness}(x, y) = f(x,y)
+
+% Function Declarations
+
+% Constant Declarations
+```
+
+# Supported LaTeX for function declarations
+```
+\mathbb{R}
+\mathbb{R}^2
+\mathbb{R}^3
+\mathbb{R}^4
+\mathbb{C}
+\to
+:
+```
+
+# Supported LaTeX for function definitions
+
+```
+\left ( ... \right )
++
+^
+-
+\left | ... \right |
+\dot
+\frac
+\sum_{...}^{...}
+\prod_{...}^{...}
+\lbracket ... \rrbracket
+>
+\geq
+<
+\leq
+=
+\sin
+\cos
+\tan
+\arcsin
+\arccos
+\arctan
+\log
+\max
+\min
+\Re
+\begin{bmatrix} x \\ y \end{bmatrix}
+\begin{bmatrix} x \\ y \\ z \end{bmatrix}
+\begin{bmatrix} x \\ y \\ z \\ w \end{bmatrix}
+\left\lVert ... \right\rVert
+```
